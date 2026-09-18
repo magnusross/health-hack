@@ -23,6 +23,7 @@ struct SettingsView: View {
             healthContextSection
             reminderSection
             modelSection
+            privacySection
             messageSection
         }
         .font(.system(.body))
@@ -108,8 +109,23 @@ struct SettingsView: View {
             }
         } header: {
             Text("Model")
-        } footer: {
-            Text("Summaries are written on this device. Nothing you say is sent anywhere.")
+        }
+    }
+
+    private var privacySection: some View {
+        Section {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "lock.shield.fill")
+                    .font(.title3)
+                    .foregroundStyle(Color.tangentPurple)
+                Text("All computation is on-device. Your data is private to you.")
+                    .font(.footnote)
+                    .foregroundStyle(Color.tangentInk.opacity(0.75))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.vertical, 6)
+            .listRowBackground(Color.white)
+            .accessibilityElement(children: .combine)
         }
     }
 
