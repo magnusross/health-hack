@@ -1,19 +1,26 @@
 import Foundation
 import SwiftData
 
-/// Keeps the summary prompt in the PROMPT table, as `rules.txt` describes.
+/// Keeps the app's prompts in the PROMPT table, as `rules.txt` describes.
 ///
-/// Generation reads the template from `SummaryPromptTemplate.dailySummary`,
-/// which stays the source of truth; this only makes sure the schema reflects
-/// the prompt the app is actually using.
+/// Generation reads its template from `PromptTemplate`, which stays the source
+/// of truth; this only makes sure the schema reflects the prompts the app is
+/// actually using.
 enum PromptSeeder {
     @MainActor
-    static func seedSummaryPrompt(in modelContext: ModelContext) throws {
-        let template = SummaryPromptTemplate.dailySummary.text
+    static func seedPrompts(in modelContext: ModelContext) throws {
+        let templates = [PromptTemplate.dailySummary, PromptTemplate.weeklyInsights]
         let existing = try modelContext.fetch(FetchDescriptor<PromptRecord>())
-        guard !existing.contains(where: { $0.text == template }) else { return }
+        var didInsert = false
 
-        modelContext.insert(PromptRecord(prompt: Prompt(text: template)))
-        try modelContext.save()
+        for template in templates
+        where !existing.contains(where: { $0.text == template.text }) {
+            modelContext.insert(PromptRecord(prompt: Prompt(text: template.text)))
+            didInsert = true
+        }
+
+        if didInsert {
+            try modelContext.save()
+        }
     }
 }

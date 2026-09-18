@@ -46,7 +46,7 @@ protocol SummaryGenerator: AnyObject, Sendable {
     func generateSummary(
         transcript: String,
         profile: PatientProfile,
-        template: SummaryPromptTemplate,
+        template: PromptTemplate,
         onShortSummary: (@Sendable (StreamedText) -> Void)?
     ) async throws -> GeneratedSummary
 }
@@ -55,7 +55,7 @@ extension SummaryGenerator {
     func generateSummary(
         transcript: String,
         profile: PatientProfile,
-        template: SummaryPromptTemplate = .dailySummary
+        template: PromptTemplate = .dailySummary
     ) async throws -> GeneratedSummary {
         try await generateSummary(
             transcript: transcript,

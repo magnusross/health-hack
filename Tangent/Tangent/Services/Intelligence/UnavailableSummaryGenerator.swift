@@ -9,7 +9,7 @@ final class UnavailableSummaryGenerator: SummaryGenerator {
     func generateSummary(
         transcript: String,
         profile: PatientProfile,
-        template: SummaryPromptTemplate,
+        template: PromptTemplate,
         onShortSummary: (@Sendable (StreamedText) -> Void)?
     ) async throws -> GeneratedSummary {
         throw SummaryGenerationError.unsupportedDevice

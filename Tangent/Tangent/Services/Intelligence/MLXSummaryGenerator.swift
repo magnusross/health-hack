@@ -25,7 +25,7 @@ actor MLXSummaryGenerator: SummaryGenerator {
     func generateSummary(
         transcript: String,
         profile: PatientProfile,
-        template: SummaryPromptTemplate,
+        template: PromptTemplate,
         onShortSummary: (@Sendable (StreamedText) -> Void)?
     ) async throws -> GeneratedSummary {
         let transcript = transcript.trimmingCharacters(in: .whitespacesAndNewlines)

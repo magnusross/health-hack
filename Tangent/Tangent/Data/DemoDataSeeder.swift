@@ -5,45 +5,12 @@ enum DemoDataSeeder {
     @MainActor
     static func seedIfNeeded(in modelContext: ModelContext) throws {
         #if DEBUG
-        let profileDescriptor = FetchDescriptor<PatientProfileRecord>(
-            sortBy: [SortDescriptor(\.name)]
-        )
-        let profile: PatientProfileRecord
-
-        let reminder = Calendar.autoupdatingCurrent.date(
-            bySettingHour: 21,
-            minute: 0,
-            second: 0,
-            of: Date()
-        )
-        let fixedProfile = PatientProfile(
-            name: "Taylor",
-            age: 29,
-            weight: 68,
-            gender: "Non-binary",
-            healthInterests: ["Sleep", "Energy", "Stress"],
-            healthConcerns: ["Headaches"],
-            email: "taylor@example.com",
-            dailyReminder: reminder
-        )
-
-        if let existingProfile = try modelContext.fetch(profileDescriptor).first {
-            let updatedProfile = PatientProfile(
-                id: existingProfile.id,
-                name: fixedProfile.name,
-                age: fixedProfile.age,
-                weight: fixedProfile.weight,
-                gender: fixedProfile.gender,
-                healthInterests: fixedProfile.healthInterests,
-                healthConcerns: fixedProfile.healthConcerns,
-                email: fixedProfile.email,
-                dailyReminder: fixedProfile.dailyReminder
-            )
-            existingProfile.update(from: updatedProfile)
-            profile = existingProfile
-        } else {
-            profile = PatientProfileRecord(profile: fixedProfile)
-            modelContext.insert(profile)
+        // The patient is seeded in every build by `PatientSeeder`; this only
+        // adds demo history on top of them.
+        guard let profile = try modelContext.fetch(
+            FetchDescriptor<PatientProfileRecord>(sortBy: [SortDescriptor(\.name)])
+        ).first else {
+            return
         }
 
         let existingEntries = try modelContext.fetch(

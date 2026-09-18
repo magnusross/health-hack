@@ -233,14 +233,14 @@ struct TangentTests {
         let context = container.mainContext
         let store = SwiftDataNoteStore(modelContext: context)
 
+        try PatientSeeder.seedIfNeeded(in: context)
         try DemoDataSeeder.seedIfNeeded(in: context)
         let patient = try #require(await store.patientProfiles().first)
         #expect(try await store.diaryEntries(patientID: patient.id).count == 11)
         let insights = try await store.insights()
         #expect(insights.count == 1)
         #expect(insights.first?.text.contains("sleep and energy") == true)
-        #expect(patient.age == 29)
-        #expect(patient.email == "taylor@example.com")
+        #expect(patient.email == "magnus.ross@example.com")
         let reminder = try #require(patient.dailyReminder)
         #expect(Calendar.autoupdatingCurrent.component(.hour, from: reminder) == 21)
 
@@ -261,19 +261,72 @@ struct TangentTests {
             email: "taylor@example.com"
         )
 
-        let filled = SummaryPromptTemplate.dailySummary.filled(
+        let filled = PromptTemplate.dailySummary.filled(
             transcript: "  I slept badly and felt flat.  ",
             profile: profile
         )
 
-        #expect(!filled.contains(SummaryPromptTemplate.transcriptPlaceholder))
-        #expect(!filled.contains(SummaryPromptTemplate.profilePlaceholder))
+        #expect(!filled.contains(PromptTemplate.transcriptPlaceholder))
+        #expect(!filled.contains(PromptTemplate.profilePlaceholder))
         #expect(filled.contains("TRANSCRIPT: I slept badly and felt flat."))
         #expect(filled.contains("Age: 29"))
         #expect(filled.contains("Weight: 68 kg"))
-        #expect(filled.contains("Health interests: Sleep, Energy"))
+        #expect(filled.contains("Health interests: Sleep Energy"))
         // The email tells the model nothing about the patient's health.
         #expect(!filled.contains("taylor@example.com"))
+    }
+
+    @Test
+    func insightsPromptFillsThePeriodAndTheDays() {
+        let filled = PromptTemplate.weeklyInsights.filled(
+            period: "7 to 13 September",
+            dailySummaries: ["User reports poor sleep.", "User reports knee pain."]
+        )
+
+        #expect(!filled.contains(PromptTemplate.periodPlaceholder))
+        #expect(!filled.contains(PromptTemplate.dailySummariesPlaceholder))
+        #expect(filled.contains("NOTES (7 to 13 September):"))
+        #expect(filled.contains("User reports poor sleep.\nUser reports knee pain."))
+    }
+
+    @Test @MainActor
+    func patientSeederCreatesTheProfileAndItsQuestions() async throws {
+        let container = try TangentModelContainer.make(inMemory: true)
+        let context = container.mainContext
+        let store = SwiftDataNoteStore(modelContext: context)
+
+        try PatientSeeder.seedIfNeeded(in: context)
+        let patient = try #require(await store.patientProfiles().first)
+        #expect(patient.name == "Magnus Ross")
+        #expect(patient.age == 29)
+        #expect(patient.weight == 75)
+        #expect(patient.gender == "male")
+        #expect(patient.healthConcerns.first?.contains("bad knee from running") == true)
+
+        // NoteStore sorts questions by text, so compare the set rather than
+        // the seeder's order.
+        let questions = try await store.questions(patientID: patient.id)
+        #expect(questions.map(\.text).sorted() == PatientSeeder.questionTexts.sorted())
+
+        // Seeding again leaves one patient and one set of questions.
+        try PatientSeeder.seedIfNeeded(in: context)
+        #expect(try await store.patientProfiles().count == 1)
+        #expect(try await store.questions(patientID: patient.id).count == 8)
+    }
+
+    @Test @MainActor
+    func promptSeederStoresBothTemplatesOnce() async throws {
+        let container = try TangentModelContainer.make(inMemory: true)
+        let context = container.mainContext
+        let store = SwiftDataNoteStore(modelContext: context)
+
+        try PromptSeeder.seedPrompts(in: context)
+        try PromptSeeder.seedPrompts(in: context)
+
+        let texts = try await store.prompts().map(\.text)
+        #expect(texts.count == 2)
+        #expect(texts.contains(PromptTemplate.dailySummary.text))
+        #expect(texts.contains(PromptTemplate.weeklyInsights.text))
     }
 
     @Test

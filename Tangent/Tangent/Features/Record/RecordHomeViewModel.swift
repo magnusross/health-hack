@@ -96,10 +96,14 @@ final class RecordHomeViewModel: ObservableObject {
             throw RecordPersistenceError.missingProfile
         }
 
+        // The questions are snapshotted onto the entry, so history keeps the
+        // questions that were actually asked even if the standing set changes.
+        let questions = try await noteStore.questions(patientID: patient.id)
+
         let entry = DiaryEntry(
             patientID: patient.id,
             day: Date(),
-            questions: [DiaryQuestion(text: "How have you been feeling?")],
+            questions: questions.map { DiaryQuestion(text: $0.text) },
             promptText: "Daily Tangent recorded and transcribed on device",
             transcriptPath: transcriptPath
         )

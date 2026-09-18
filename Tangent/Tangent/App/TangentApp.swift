@@ -11,7 +11,10 @@ struct TangentApp: App {
         do {
             let modelContainer = try TangentModelContainer.make()
             self.modelContainer = modelContainer
-            try PromptSeeder.seedSummaryPrompt(
+            try PatientSeeder.seedIfNeeded(
+                in: modelContainer.mainContext
+            )
+            try PromptSeeder.seedPrompts(
                 in: modelContainer.mainContext
             )
             try DemoDataSeeder.seedIfNeeded(
