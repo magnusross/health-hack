@@ -224,7 +224,6 @@ struct TangentTests {
         )
 
         #expect(try String(contentsOfFile: path, encoding: .utf8) == transcript)
-        #expect(RecordHomeViewModel.summarize(transcript) == "I slept well.")
         #expect(path.hasSuffix(".txt"))
     }
 
@@ -248,6 +247,71 @@ struct TangentTests {
         try DemoDataSeeder.seedIfNeeded(in: context)
         #expect(try await store.diaryEntries(patientID: patient.id).count == 11)
         #expect(try await store.insights().count == 1)
+    }
+
+    @Test
+    func promptTemplateFillsBothPlaceholders() {
+        let profile = PatientProfile(
+            name: "Taylor",
+            age: 29,
+            weight: 68,
+            gender: "Non-binary",
+            healthInterests: ["Sleep", "Energy"],
+            healthConcerns: ["Headaches"],
+            email: "taylor@example.com"
+        )
+
+        let filled = SummaryPromptTemplate.dailySummary.filled(
+            transcript: "  I slept badly and felt flat.  ",
+            profile: profile
+        )
+
+        #expect(!filled.contains(SummaryPromptTemplate.transcriptPlaceholder))
+        #expect(!filled.contains(SummaryPromptTemplate.profilePlaceholder))
+        #expect(filled.contains("TRANSCRIPT: I slept badly and felt flat."))
+        #expect(filled.contains("Age: 29"))
+        #expect(filled.contains("Weight: 68 kg"))
+        #expect(filled.contains("Health interests: Sleep, Energy"))
+        // The email tells the model nothing about the patient's health.
+        #expect(!filled.contains("taylor@example.com"))
+    }
+
+    @Test
+    func profileDescriptionOmitsFieldsThePatientDidNotGive() {
+        let sparse = PatientProfile(name: "Sam")
+
+        let description = sparse.promptDescription
+
+        #expect(description == "Name: Sam")
+        #expect(!description.contains("Age"))
+        #expect(!description.contains("Weight"))
+        #expect(PatientProfile(name: "").promptDescription
+            == "No profile details were given.")
+    }
+
+    @Test
+    func summaryJSONReadsBareFencedAndSurroundedOutput() {
+        let bare = #"{"short_summary": "I slept well.", "long_summary": "A steady day."}"#
+        let fenced = "```json\n" + bare + "\n```"
+        let surrounded = "Here is the summary:\n" + bare + "\nLet me know if that helps."
+
+        for output in [bare, fenced, surrounded] {
+            let parsed = SummaryJSON.parse(output)
+            #expect(parsed?.short == "I slept well.")
+            #expect(parsed?.long == "A steady day.")
+        }
+    }
+
+    @Test
+    func summaryJSONIgnoresBracesInsideStringsAndRejectsBadOutput() {
+        let braces = #"{"short_summary": "I wrote {notes} today.", "long_summary": "All fine."}"#
+        #expect(SummaryJSON.parse(braces)?.short == "I wrote {notes} today.")
+
+        // Truncated at the token cap, missing a key, and empty values.
+        #expect(SummaryJSON.parse(#"{"short_summary": "I slept well.", "long_su"#) == nil)
+        #expect(SummaryJSON.parse(#"{"short_summary": "I slept well."}"#) == nil)
+        #expect(SummaryJSON.parse(#"{"short_summary": "", "long_summary": "  "}"#) == nil)
+        #expect(SummaryJSON.parse("I could not write a summary.") == nil)
     }
 
     private var testCalendar: Calendar {

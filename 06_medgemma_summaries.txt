@@ -435,3 +435,40 @@ Work on `adding_medgemma`. Keep each step isolated and commit as you go, e.g.
   feat: generate diary summaries with MLX
   feat: manage Gemma and MedGemma downloads in settings
   feat: show summary generation state on daily details
+
+--------------------------------------------------
+IMPLEMENTATION NOTES (added while building)
+--------------------------------------------------
+
+Answers to the questions this plan left open, and the two places the
+implementation departs from it.
+
+Packages:
+- `MLXHuggingFace` is macros only. Its expansions reference `HuggingFace` and
+  `Tokenizers`, so the app target must also link
+  `huggingface/swift-huggingface` (product `HuggingFace`, 0.9.0) and
+  `huggingface/swift-transformers` (product `Tokenizers`, 1.3.0). All three
+  packages are pinned with `exactVersion`.
+- mlx-swift resolves to 0.31.6 through mlx-swift-lm's own requirement.
+- mlx-swift ships a `CudaBuild` prebuild plugin. Xcode asks once to trust it;
+  from the command line pass `-skipPackagePluginValidation`.
+
+Simulator:
+- MLX DOES build and link for the iOS Simulator, so there is no need to
+  condition the dependency. Only the runtime is unavailable, which
+  `TangentApp` handles by injecting `UnavailableSummaryGenerator` under
+  `#if targetEnvironment(simulator)`.
+
+Downloads:
+- `MLXLMCommon.resolve(configuration:from:useLatest:progressHandler:)` is
+  public and downloads the model's files without loading them into memory,
+  which is what Settings uses. It fetches exactly the patterns the factory will
+  later want (`*.safetensors`, `*.json`, `*.jinja`), so generation finds
+  everything already cached.
+
+Departures from the plan above:
+- The cellular warning became a size confirmation shown before ANY model is
+  downloaded, naming the model and its size. 2.5 GB is worth confirming on any
+  connection, and it avoids adding a network-path monitor.
+- `SettingsView`'s `Form` had to be split into per-section computed properties;
+  the whole body in one expression exceeded the type-checker's budget.
