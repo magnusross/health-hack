@@ -108,19 +108,13 @@ struct DailyTangentDetailsView: View {
         return "No transcript is available for this entry."
     }
 
-    @ViewBuilder
     private func summarySection(for entry: DiaryEntry) -> some View {
-        // Nothing is drawn until there is something true to say, so the screen
-        // never claims there is no summary a moment before one appears.
-        if model.summaryDisplay != .nothingYet {
-            VStack(alignment: .leading, spacing: 9) {
-                Text("Summary")
-                    .font(.system(.headline, design: .serif))
-                    .foregroundStyle(Color.tangentInk)
+        VStack(alignment: .leading, spacing: 9) {
+            Text("Summary")
+                .font(.system(.headline, design: .serif))
+                .foregroundStyle(Color.tangentInk)
 
-                summaryContent
-            }
-            .transition(.opacity)
+            summaryContent
         }
     }
 
@@ -128,28 +122,22 @@ struct DailyTangentDetailsView: View {
     private var summaryContent: some View {
         switch model.summaryDisplay {
         case .nothingYet:
-            EmptyView()
-
-        case .writing(let text):
-            VStack(alignment: .leading, spacing: 10) {
-                summaryText(text)
-                HStack(spacing: 8) {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text("Writing…")
-                        .font(.system(.footnote, design: .serif))
-                        .foregroundStyle(Color.tangentInk.opacity(0.45))
-                }
-            }
-
-        case .written(let text):
-            summaryText(text)
-
-        case .failed(let message, let needsModel):
-            VStack(alignment: .leading, spacing: 12) {
-                Text(message)
+            HStack(spacing: 8) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Generating summary…")
                     .font(.system(.body, design: .serif))
                     .foregroundStyle(Color.tangentInk.opacity(0.6))
+            }
+
+        // Words appearing one by one say "in progress" better than a label
+        // would, so nothing else is shown while they arrive.
+        case .writing(let text), .written(let text):
+            summaryText(text)
+
+        case .failed(_, let needsModel):
+            VStack(alignment: .leading, spacing: 12) {
+                unavailableText
 
                 if needsModel, let openSettings {
                     Button("Choose a model", action: openSettings)
@@ -165,10 +153,14 @@ struct DailyTangentDetailsView: View {
             }
 
         case .never:
-            Text("No summary has been written for this Tangent yet.")
-                .font(.system(.body, design: .serif))
-                .foregroundStyle(Color.tangentInk.opacity(0.6))
+            unavailableText
         }
+    }
+
+    private var unavailableText: some View {
+        Text("No summary available.")
+            .font(.system(.body, design: .serif))
+            .foregroundStyle(Color.tangentInk.opacity(0.6))
     }
 
     @ViewBuilder

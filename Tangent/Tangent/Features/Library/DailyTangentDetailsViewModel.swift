@@ -69,7 +69,11 @@ final class DailyTangentDetailsViewModel: ObservableObject {
             return .failed(message: message, needsModel: needsModel)
 
         case .generating:
-            guard let streaming = streamingShortSummary else { return .nothingYet }
+            guard let streaming = streamingShortSummary,
+                  !streaming.text.isEmpty
+            else {
+                return .nothingYet
+            }
             // The model closes the short summary long before it finishes the
             // long one. Once it has, this is finished text, not a work in
             // progress, and saying otherwise is what made it look stuck.
