@@ -314,6 +314,50 @@ struct TangentTests {
         #expect(SummaryJSON.parse("I could not write a summary.") == nil)
     }
 
+    @Test
+    func partialShortSummaryGrowsAsTheModelWrites() {
+        let prefixes = [
+            #"{"#,
+            #"{"short_summary"#,
+            #"{"short_summary": "#,
+            #"{"short_summary": ""#,
+            #"{"short_summary": "I slept"#,
+            #"{"short_summary": "I slept badly."#,
+            #"{"short_summary": "I slept badly.", "long_summary": "I woke"#,
+        ]
+        let expected: [String?] = [
+            nil, nil, nil, "", "I slept", "I slept badly.", "I slept badly.",
+        ]
+
+        for (prefix, value) in zip(prefixes, expected) {
+            #expect(SummaryJSON.partialValue(of: "short_summary", in: prefix) == value)
+        }
+    }
+
+    @Test
+    func partialValueHandlesEscapesArrivingOneCharacterAtATime() {
+        let complete = #"{"short_summary": "I said \"fine\" and meant it"#
+        #expect(
+            SummaryJSON.partialValue(of: "short_summary", in: complete)
+                == #"I said "fine" and meant it"#
+        )
+
+        // A backslash with nothing after it yet is dropped rather than shown.
+        #expect(
+            SummaryJSON.partialValue(of: "short_summary", in: #"{"short_summary": "I said \"#)
+                == "I said "
+        )
+        // Half a unicode escape is dropped too.
+        #expect(
+            SummaryJSON.partialValue(of: "short_summary", in: #"{"short_summary": "caf\u00"#)
+                == "caf"
+        )
+        #expect(
+            SummaryJSON.partialValue(of: "short_summary", in: #"{"short_summary": "caf\u00e9."#)
+                == "café."
+        )
+    }
+
     private var testCalendar: Calendar {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!

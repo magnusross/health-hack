@@ -19,11 +19,14 @@ struct GeneratedSummary: Equatable, Sendable {
 /// Implementations must be safe to call off the main actor, must not hold any
 /// state between calls, and must honour task cancellation.
 protocol SummaryGenerator: AnyObject, Sendable {
+    /// - Parameter onShortSummary: the short summary as it is written, so the
+    ///   screen can show it filling in. The long summary follows it and keeps
+    ///   generating after this stops changing.
     func generateSummary(
         transcript: String,
         profile: PatientProfile,
         template: SummaryPromptTemplate,
-        onProgress: (@Sendable (Int) -> Void)?
+        onShortSummary: (@Sendable (String) -> Void)?
     ) async throws -> GeneratedSummary
 }
 
@@ -37,7 +40,7 @@ extension SummaryGenerator {
             transcript: transcript,
             profile: profile,
             template: template,
-            onProgress: nil
+            onShortSummary: nil
         )
     }
 }

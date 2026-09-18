@@ -8,7 +8,7 @@ final class UnavailableSummaryGenerator: SummaryGenerator {
         transcript: String,
         profile: PatientProfile,
         template: SummaryPromptTemplate,
-        onProgress: (@Sendable (Int) -> Void)?
+        onShortSummary: (@Sendable (String) -> Void)?
     ) async throws -> GeneratedSummary {
         throw SummaryGenerationError.unsupportedDevice
     }

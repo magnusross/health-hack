@@ -18,7 +18,7 @@ actor MLXSummaryGenerator: SummaryGenerator {
         transcript: String,
         profile: PatientProfile,
         template: SummaryPromptTemplate,
-        onProgress: (@Sendable (Int) -> Void)?
+        onShortSummary: (@Sendable (String) -> Void)?
     ) async throws -> GeneratedSummary {
         let transcript = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !transcript.isEmpty else {
@@ -33,7 +33,11 @@ actor MLXSummaryGenerator: SummaryGenerator {
         let container = try await container(for: model)
         let prompt = template.filled(transcript: transcript, profile: profile)
 
-        let first = try await complete(prompt: prompt, in: container, onProgress: onProgress)
+        let first = try await complete(
+            prompt: prompt,
+            in: container,
+            onShortSummary: onShortSummary
+        )
         if let parsed = SummaryJSON.parse(first) {
             return GeneratedSummary(
                 short: parsed.short,
@@ -45,7 +49,11 @@ actor MLXSummaryGenerator: SummaryGenerator {
         // One retry. A model that wandered off the format usually comes back
         // when asked more bluntly.
         let retry = prompt + "\n\n" + Self.formatReminder
-        let second = try await complete(prompt: retry, in: container, onProgress: onProgress)
+        let second = try await complete(
+            prompt: retry,
+            in: container,
+            onShortSummary: onShortSummary
+        )
         guard let parsed = SummaryJSON.parse(second) else {
             throw SummaryGenerationError.outputNotParseable
         }
@@ -60,7 +68,7 @@ actor MLXSummaryGenerator: SummaryGenerator {
     private func complete(
         prompt: String,
         in container: ModelContainer,
-        onProgress: (@Sendable (Int) -> Void)?
+        onShortSummary: (@Sendable (String) -> Void)?
     ) async throws -> String {
         let output = try await container.perform { (context: ModelContext) -> String in
             let input = try await context.processor.prepare(
@@ -71,7 +79,7 @@ actor MLXSummaryGenerator: SummaryGenerator {
             let parameters = GenerateParameters(maxTokens: 800, temperature: 0.2)
 
             var output = ""
-            var chunks = 0
+            var reported: String?
             for await generation in try MLXLMCommon.generate(
                 input: input,
                 parameters: parameters,
@@ -80,8 +88,18 @@ actor MLXSummaryGenerator: SummaryGenerator {
                 if Task.isCancelled { break }
                 guard let chunk = generation.chunk else { continue }
                 output += chunk
-                chunks += 1
-                onProgress?(chunks)
+
+                // The model writes short_summary first, so it can be shown
+                // filling in while the long one is still being generated.
+                guard let onShortSummary else { continue }
+                let partial = SummaryJSON.partialValue(
+                    of: "short_summary",
+                    in: output
+                )
+                if let partial, partial != reported {
+                    reported = partial
+                    onShortSummary(partial)
+                }
             }
             return output
         }

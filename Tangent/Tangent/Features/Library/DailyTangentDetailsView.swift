@@ -116,13 +116,19 @@ struct DailyTangentDetailsView: View {
 
             switch model.summaryState {
             case .generating:
-                HStack(spacing: 9) {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text("Writing your summary…")
-                        .font(.system(.body, design: .serif))
-                        .foregroundStyle(Color.tangentInk.opacity(0.6))
+                VStack(alignment: .leading, spacing: 12) {
+                    if !model.streamingShortSummary.isEmpty {
+                        summaryText(model.streamingShortSummary)
+                    }
+                    HStack(spacing: 9) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Writing your summary…")
+                            .font(.system(.footnote, design: .serif))
+                            .foregroundStyle(Color.tangentInk.opacity(0.5))
+                    }
                 }
+                .animation(.easeOut(duration: 0.15), value: model.streamingShortSummary)
 
             case .failed(let message, let needsModel):
                 VStack(alignment: .leading, spacing: 12) {
@@ -145,10 +151,9 @@ struct DailyTangentDetailsView: View {
 
             case .idle:
                 if model.hasSummary {
-                    VStack(alignment: .leading, spacing: 14) {
-                        summaryText(entry.summaryShort, weight: .medium)
-                        summaryText(entry.summaryLong, weight: .regular)
-                    }
+                    // Only the short summary belongs on the day's screen. The
+                    // long one is stored for insights to read across days.
+                    summaryText(entry.summaryShort)
                 } else {
                     Text("No summary has been written for this Tangent yet.")
                         .font(.system(.body, design: .serif))
@@ -159,11 +164,11 @@ struct DailyTangentDetailsView: View {
     }
 
     @ViewBuilder
-    private func summaryText(_ text: String, weight: Font.Weight) -> some View {
+    private func summaryText(_ text: String) -> some View {
         if !text.isEmpty {
             Text(text)
-                .font(.system(.body, design: .serif, weight: weight))
-                .foregroundStyle(Color.tangentInk.opacity(weight == .medium ? 0.95 : 0.82))
+                .font(.system(.body, design: .serif))
+                .foregroundStyle(Color.tangentInk.opacity(0.9))
                 .lineSpacing(6)
                 .textSelection(.enabled)
         }

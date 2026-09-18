@@ -5,7 +5,7 @@ import Foundation
 final class DailyTangentDetailsViewModel: ObservableObject {
     enum SummaryState: Equatable {
         case idle
-        case generating(tokens: Int)
+        case generating
         /// `needsModel` means no weights are on disk, so the fix is in Settings
         /// rather than another attempt.
         case failed(message: String, needsModel: Bool)
@@ -15,6 +15,9 @@ final class DailyTangentDetailsViewModel: ObservableObject {
     @Published private(set) var transcript: String?
     @Published private(set) var isTranscribing = false
     @Published private(set) var summaryState: SummaryState = .idle
+    /// The short summary as the model writes it, shown until the saved entry
+    /// takes over.
+    @Published private(set) var streamingShortSummary = ""
     @Published private(set) var loadError: String?
 
     private let noteStore: any NoteStore
@@ -42,9 +45,11 @@ final class DailyTangentDetailsViewModel: ObservableObject {
         return false
     }
 
+    /// The long summary is written and stored for insights, but the day's
+    /// screen shows only the short one.
     var hasSummary: Bool {
         guard let entry else { return false }
-        return !entry.summaryShort.isEmpty || !entry.summaryLong.isEmpty
+        return !entry.summaryShort.isEmpty
     }
 
     func start() async {
@@ -178,16 +183,17 @@ final class DailyTangentDetailsViewModel: ObservableObject {
             return
         }
 
-        summaryState = .generating(tokens: 0)
+        streamingShortSummary = ""
+        summaryState = .generating
         do {
             let generated = try await summaryGenerator.generateSummary(
                 transcript: transcript,
                 profile: profile,
                 template: .dailySummary,
-                onProgress: { [weak self] tokens in
+                onShortSummary: { [weak self] partial in
                     Task { @MainActor in
                         guard let self, self.isGenerating else { return }
-                        self.summaryState = .generating(tokens: tokens)
+                        self.streamingShortSummary = partial
                     }
                 }
             )
@@ -198,6 +204,7 @@ final class DailyTangentDetailsViewModel: ObservableObject {
             updated.promptText = generated.promptText
             try await noteStore.saveDiaryEntry(updated)
             self.entry = updated
+            streamingShortSummary = ""
             summaryState = .idle
         } catch {
             summaryState = .failed(
