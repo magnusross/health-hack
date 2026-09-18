@@ -116,16 +116,22 @@ struct DiaryHomeView: View {
     }
 
     private func filledDayCard(_ entry: DiaryEntry, on date: Date) -> some View {
-        dayCard(on: date, chrome: .filled, action: { openEntry(entry.id) }) {
-            Text(entry.summaryShort)
+        // An entry whose summary has not been written yet — the model failed,
+        // or none was available — still has a transcript worth opening, so the
+        // row says so rather than sitting blank.
+        let hasSummary = !entry.summaryShort.isEmpty
+        let summary = hasSummary ? entry.summaryShort : "Summary not written yet"
+
+        return dayCard(on: date, chrome: .filled, action: { openEntry(entry.id) }) {
+            Text(summary)
                 .font(.system(.callout, design: .serif))
-                .foregroundStyle(Color.tangentInk)
+                .foregroundStyle(Color.tangentInk.opacity(hasSummary ? 1 : 0.5))
                 .multilineTextAlignment(.center)
                 .lineLimit(3)
                 .truncationMode(.tail)
                 .frame(maxWidth: .infinity)
         }
-        .accessibilityLabel("\(fullDate(date)). \(entry.summaryShort)")
+        .accessibilityLabel("\(fullDate(date)). \(summary)")
         .accessibilityHint("Opens daily Tangent details")
     }
 

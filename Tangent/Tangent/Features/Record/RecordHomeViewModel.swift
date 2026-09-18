@@ -67,10 +67,7 @@ final class RecordHomeViewModel: ObservableObject {
 
         do {
             let recordingURL = try await audioRecorder.stopRecording()
-            return try await saveTodayEntry(
-                transcript: "",
-                transcriptPath: recordingURL.path
-            )
+            return try await saveTodayEntry(transcriptPath: recordingURL.path)
         } catch {
             phase = .failed(message: error.localizedDescription)
             return nil
@@ -81,22 +78,18 @@ final class RecordHomeViewModel: ObservableObject {
         elapsedTask?.cancel()
     }
 
-    private func saveTodayEntry(
-        transcript: String,
-        transcriptPath: String
-    ) async throws -> UUID {
+    /// Saves the entry with the audio path only. The transcript and both
+    /// summaries are filled in on the daily details screen.
+    private func saveTodayEntry(transcriptPath: String) async throws -> UUID {
         guard let patient = try await noteStore.patientProfiles().first else {
             throw RecordPersistenceError.missingProfile
         }
 
-        let summary = Self.summarize(transcript)
         let entry = DiaryEntry(
             patientID: patient.id,
             day: Date(),
             questions: [DiaryQuestion(text: "How have you been feeling?")],
             promptText: "Daily Tangent recorded and transcribed on device",
-            summaryShort: summary,
-            summaryLong: transcript,
             transcriptPath: transcriptPath
         )
         try await noteStore.saveDiaryEntry(entry)
@@ -115,17 +108,6 @@ final class RecordHomeViewModel: ObservableObject {
         let url = directory.appending(path: "tangent-\(UUID().uuidString).txt")
         try transcript.write(to: url, atomically: true, encoding: .utf8)
         return url.path
-    }
-
-    nonisolated static func summarize(_ transcript: String) -> String {
-        let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return "Today’s Tangent" }
-
-        if let end = trimmed.firstIndex(where: { $0 == "." || $0 == "?" || $0 == "!" }) {
-            return String(trimmed[...end]).trimmingCharacters(in: .whitespaces)
-        }
-        if trimmed.count <= 120 { return trimmed }
-        return String(trimmed.prefix(117)).trimmingCharacters(in: .whitespaces) + "…"
     }
 
     private func startElapsedTimer() {

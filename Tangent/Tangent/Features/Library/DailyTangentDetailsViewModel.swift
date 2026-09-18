@@ -3,34 +3,56 @@ import Foundation
 
 @MainActor
 final class DailyTangentDetailsViewModel: ObservableObject {
+    enum SummaryState: Equatable {
+        case idle
+        case generating(tokens: Int)
+        /// `needsModel` means no weights are on disk, so the fix is in Settings
+        /// rather than another attempt.
+        case failed(message: String, needsModel: Bool)
+    }
+
     @Published private(set) var entry: DiaryEntry?
     @Published private(set) var transcript: String?
     @Published private(set) var isTranscribing = false
+    @Published private(set) var summaryState: SummaryState = .idle
     @Published private(set) var loadError: String?
 
     private let noteStore: any NoteStore
     private let transcriber: (any Transcriber)?
+    private let summaryGenerator: (any SummaryGenerator)?
     private let diaryID: UUID
     let streamsTranscript: Bool
 
     init(
         noteStore: any NoteStore,
         transcriber: (any Transcriber)? = nil,
+        summaryGenerator: (any SummaryGenerator)? = nil,
         diaryID: UUID,
         streamsTranscript: Bool = false
     ) {
         self.noteStore = noteStore
         self.transcriber = transcriber
+        self.summaryGenerator = summaryGenerator
         self.diaryID = diaryID
         self.streamsTranscript = streamsTranscript
     }
 
+    var isGenerating: Bool {
+        if case .generating = summaryState { return true }
+        return false
+    }
+
+    var hasSummary: Bool {
+        guard let entry else { return false }
+        return !entry.summaryShort.isEmpty || !entry.summaryLong.isEmpty
+    }
+
     func start() async {
         await load()
-        guard transcript == nil else { return }
-        if streamsTranscript || hasPendingAudio {
+        if transcript == nil, streamsTranscript || hasPendingAudio {
             await transcribeFreshRecording(animate: streamsTranscript)
         }
+        await generateSummaryIfNeeded()
     }
 
     func load() async {
@@ -41,6 +63,12 @@ final class DailyTangentDetailsViewModel: ObservableObject {
         } catch {
             loadError = "This Tangent could not be loaded."
         }
+    }
+
+    /// Runs the model again for an entry that failed, or was recorded before a
+    /// model was available.
+    func regenerate() async {
+        await generateSummary()
     }
 
     nonisolated static func loadTranscript(at path: String) -> String? {
@@ -58,11 +86,7 @@ final class DailyTangentDetailsViewModel: ObservableObject {
 
     private static func storedTranscript(from entry: DiaryEntry?) -> String? {
         guard let entry else { return nil }
-        if let fileTranscript = loadTranscript(at: entry.transcriptPath) {
-            return fileTranscript
-        }
-        let long = entry.summaryLong.trimmingCharacters(in: .whitespacesAndNewlines)
-        return long.isEmpty ? nil : long
+        return loadTranscript(at: entry.transcriptPath)
     }
 
     private var hasPendingAudio: Bool {
@@ -109,12 +133,12 @@ final class DailyTangentDetailsViewModel: ObservableObject {
         transcript = fullText
     }
 
+    /// Stores the transcript and points the entry at it. The summaries stay
+    /// empty until the model has written them.
     private func persist(_ transcript: String) async throws {
         guard var entry else { return }
         let audioPath = entry.transcriptPath
         let storedPath = try RecordHomeViewModel.writeTranscript(transcript)
-        entry.summaryShort = RecordHomeViewModel.summarize(transcript)
-        entry.summaryLong = transcript
         entry.transcriptPath = storedPath
         try await noteStore.saveDiaryEntry(entry)
         self.entry = entry
@@ -123,5 +147,69 @@ final class DailyTangentDetailsViewModel: ObservableObject {
                 at: URL(fileURLWithPath: audioPath)
             )
         }
+    }
+
+    private func generateSummaryIfNeeded() async {
+        guard !hasSummary, !isGenerating else { return }
+        await generateSummary()
+    }
+
+    private func generateSummary() async {
+        guard let summaryGenerator,
+              let entry,
+              let transcript,
+              !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else {
+            return
+        }
+
+        let profile: PatientProfile?
+        do {
+            profile = try await noteStore.patientProfiles().first
+        } catch {
+            summaryState = .failed(message: error.localizedDescription, needsModel: false)
+            return
+        }
+        guard let profile else {
+            summaryState = .failed(
+                message: "Your profile is needed to write a summary.",
+                needsModel: false
+            )
+            return
+        }
+
+        summaryState = .generating(tokens: 0)
+        do {
+            let generated = try await summaryGenerator.generateSummary(
+                transcript: transcript,
+                profile: profile,
+                template: .dailySummary,
+                onProgress: { [weak self] tokens in
+                    Task { @MainActor in
+                        guard let self, self.isGenerating else { return }
+                        self.summaryState = .generating(tokens: tokens)
+                    }
+                }
+            )
+
+            var updated = entry
+            updated.summaryShort = generated.short
+            updated.summaryLong = generated.long
+            updated.promptText = generated.promptText
+            try await noteStore.saveDiaryEntry(updated)
+            self.entry = updated
+            summaryState = .idle
+        } catch {
+            summaryState = .failed(
+                message: error.localizedDescription,
+                needsModel: Self.needsModel(error)
+            )
+        }
+    }
+
+    private static func needsModel(_ error: Error) -> Bool {
+        guard let error = error as? SummaryGenerationError else { return false }
+        if case .modelNotDownloaded = error { return true }
+        return false
     }
 }

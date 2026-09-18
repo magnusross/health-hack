@@ -23,21 +23,26 @@ struct ContentView: View {
                         DailyTangentDetailsView(
                             noteStore: dependencies.noteStore,
                             transcriber: dependencies.transcriber,
+                            summaryGenerator: dependencies.summaryGenerator,
                             diaryID: diaryID,
-                            redoToday: startNewRecording
+                            redoToday: startNewRecording,
+                            openSettings: { diaryPath.append(.settings) }
                         )
                     case .freshRecording(let diaryID):
                         DailyTangentDetailsView(
                             noteStore: dependencies.noteStore,
                             transcriber: dependencies.transcriber,
+                            summaryGenerator: dependencies.summaryGenerator,
                             diaryID: diaryID,
                             streamsTranscript: true,
-                            redoToday: startNewRecording
+                            redoToday: startNewRecording,
+                            openSettings: { diaryPath.append(.settings) }
                         )
                     case .settings:
                         SettingsView(
                             noteStore: dependencies.noteStore,
-                            reminderScheduler: dependencies.reminderScheduler
+                            reminderScheduler: dependencies.reminderScheduler,
+                            modelCatalog: dependencies.modelCatalog
                         )
                     }
                 }
@@ -61,7 +66,8 @@ struct ContentView: View {
                     case .settings:
                         SettingsView(
                             noteStore: dependencies.noteStore,
-                            reminderScheduler: dependencies.reminderScheduler
+                            reminderScheduler: dependencies.reminderScheduler,
+                            modelCatalog: dependencies.modelCatalog
                         )
                     }
                 }
@@ -135,7 +141,9 @@ private enum RecordRoute: Hashable {
             noteStore: SwiftDataNoteStore(modelContext: container.mainContext),
             audioRecorder: UnavailableAudioRecorder(),
             transcriber: UnavailableTranscriber(),
-            reminderScheduler: UnavailableReminderScheduler()
+            reminderScheduler: UnavailableReminderScheduler(),
+            summaryGenerator: UnavailableSummaryGenerator(),
+            modelCatalog: MLXModelCatalog()
         )
     )
 }
