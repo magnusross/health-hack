@@ -13,6 +13,9 @@ actor MLXSummaryGenerator: SummaryGenerator {
     /// The one resident model. 0.8 GB and 2.5 GB together will get the app
     /// killed on iOS, so switching models drops the previous one.
     private var loaded: (model: SummaryModelID, container: ModelContainer)?
+    /// The load in flight, if any. An actor suspends at every `await`, so
+    /// without this a second caller arriving mid-load starts its own.
+    private var loading: (model: SummaryModelID, task: Task<ModelContainer, Error>)?
 
     /// Loads the selected model so a summary asked for moments later does not
     /// have to wait for weights to come off disk.
@@ -121,15 +124,30 @@ actor MLXSummaryGenerator: SummaryGenerator {
             return loaded.container
         }
 
+        // Join a load already running for this model rather than starting a
+        // second one. Warming on the record screen and generating after
+        // transcription are two callers, and loading a 4B model twice is 5 GB
+        // resident, which iOS kills the app for.
+        if let loading, loading.model == model {
+            return try await loading.task.value
+        }
+        loading?.task.cancel()
+
         Memory.cacheLimit = 20 * 1024 * 1024
         loaded = nil
 
-        do {
-            let container = try await model.factory.loadContainer(
+        let task = Task<ModelContainer, Error> {
+            try await model.factory.loadContainer(
                 from: #hubDownloader(ModelStorage.client()),
                 using: #huggingFaceTokenizerLoader(),
                 configuration: model.configuration
             )
+        }
+        loading = (model, task)
+        defer { loading = nil }
+
+        do {
+            let container = try await task.value
             loaded = (model, container)
             return container
         } catch {
