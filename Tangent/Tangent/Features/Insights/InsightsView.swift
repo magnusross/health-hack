@@ -43,17 +43,24 @@ struct InsightsView: View {
     }
 
     private var insightsList: some View {
-        ScrollView {
-            LazyVStack(spacing: 16) {
-                ForEach(model.insights) { insight in
-                    insightBlock(insight)
+        GeometryReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 16) {
+                    ForEach(model.insights) { insight in
+                        insightBlock(insight)
+                    }
                 }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+                .frame(
+                    maxWidth: .infinity,
+                    minHeight: proxy.size.height,
+                    alignment: .center
+                )
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
-        }
-        .refreshable {
-            await model.load()
+            .refreshable {
+                await model.load()
+            }
         }
     }
 
