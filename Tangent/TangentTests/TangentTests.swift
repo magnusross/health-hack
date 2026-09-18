@@ -307,6 +307,7 @@ struct TangentTests {
         #expect(insights.first?.text.contains("sleep and energy") == true)
         #expect(patient.age == 29)
         #expect(patient.email == "taylor@example.com")
+        #expect(try await store.questions(patientID: patient.id).count == 6)
         let reminder = try #require(patient.dailyReminder)
         #expect(Calendar.autoupdatingCurrent.component(.hour, from: reminder) == 21)
 

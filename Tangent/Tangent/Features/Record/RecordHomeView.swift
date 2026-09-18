@@ -53,6 +53,10 @@ struct RecordHomeView: View {
                 .ignoresSafeArea()
 
             orb
+                .overlay(alignment: .top) {
+                    promptingQuestion
+                        .offset(y: -112)
+                }
                 .overlay(alignment: .bottom) {
                     statusBelowOrb
                         .padding(.top, 12)
@@ -113,6 +117,28 @@ struct RecordHomeView: View {
             guard !model.isBusy else { return }
             Task { await model.startRecording() }
         }
+    }
+
+    private var promptingQuestion: some View {
+        ZStack {
+            if model.isRecording, let question = model.currentPromptQuestion {
+                Text(question)
+                    .id(question)
+                    .font(.system(.title3, design: .serif, weight: .regular))
+                    .foregroundStyle(Color.tangentInk.opacity(0.78))
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(5)
+                    .frame(maxWidth: 320)
+                    .transition(.opacity)
+                    .accessibilityLabel("Prompt: \(question)")
+            }
+        }
+        .frame(width: 330, height: 80)
+        .allowsHitTesting(false)
+        .animation(
+            reduceMotion ? nil : .easeInOut(duration: 1.8),
+            value: model.currentPromptQuestion
+        )
     }
 
     private var chromeAnimation: Animation? {

@@ -10,21 +10,30 @@ final class RecordHomeViewModel: ObservableObject {
 
     @Published private(set) var phase: Phase = .idle
     @Published private(set) var elapsed: TimeInterval = 0
+    @Published private(set) var currentPromptQuestion: String?
+    @Published private(set) var promptedQuestions: [DiaryQuestion] = []
 
     private let audioRecorder: any AudioRecorder
     private let transcriber: any Transcriber
     private let noteStore: any NoteStore
     private var elapsedTask: Task<Void, Never>?
+    private var questionTask: Task<Void, Never>?
     private var isFinishing = false
+    private let initialQuestionDelay: Duration
+    private let questionInterval: Duration
 
     init(
         audioRecorder: any AudioRecorder,
         transcriber: any Transcriber,
-        noteStore: any NoteStore
+        noteStore: any NoteStore,
+        initialQuestionDelay: Duration = .seconds(3),
+        questionInterval: Duration = .seconds(10)
     ) {
         self.audioRecorder = audioRecorder
         self.transcriber = transcriber
         self.noteStore = noteStore
+        self.initialQuestionDelay = initialQuestionDelay
+        self.questionInterval = questionInterval
     }
 
     var isRecording: Bool { phase == .recording }
@@ -49,8 +58,11 @@ final class RecordHomeViewModel: ObservableObject {
         do {
             try await audioRecorder.startRecording(to: Self.newRecordingDestination())
             elapsed = 0
+            promptedQuestions = []
+            currentPromptQuestion = nil
             phase = .recording
             startElapsedTimer()
+            await startQuestionStream()
         } catch {
             phase = .failed(message: error.localizedDescription)
         }
@@ -62,6 +74,7 @@ final class RecordHomeViewModel: ObservableObject {
         guard phase == .recording, !isFinishing else { return nil }
         isFinishing = true
         stopElapsedTimer()
+        stopQuestionStream()
         phase = .idle
         defer { isFinishing = false }
 
@@ -69,7 +82,8 @@ final class RecordHomeViewModel: ObservableObject {
             let recordingURL = try await audioRecorder.stopRecording()
             return try await saveTodayEntry(
                 transcript: "",
-                transcriptPath: recordingURL.path
+                transcriptPath: recordingURL.path,
+                questions: promptedQuestions
             )
         } catch {
             phase = .failed(message: error.localizedDescription)
@@ -79,11 +93,13 @@ final class RecordHomeViewModel: ObservableObject {
 
     deinit {
         elapsedTask?.cancel()
+        questionTask?.cancel()
     }
 
     private func saveTodayEntry(
         transcript: String,
-        transcriptPath: String
+        transcriptPath: String,
+        questions: [DiaryQuestion]
     ) async throws -> UUID {
         guard let patient = try await noteStore.patientProfiles().first else {
             throw RecordPersistenceError.missingProfile
@@ -95,7 +111,7 @@ final class RecordHomeViewModel: ObservableObject {
         let entry = DiaryEntry(
             patientID: patient.id,
             day: Date(),
-            questions: [DiaryQuestion(text: "How have you been feeling?")],
+            questions: questions,
             promptText: "Daily Tangent recorded and transcribed on device",
             summaryShort: summary,
             summaryLong: transcript,
@@ -145,6 +161,38 @@ final class RecordHomeViewModel: ObservableObject {
     private func stopElapsedTimer() {
         elapsedTask?.cancel()
         elapsedTask = nil
+    }
+
+    private func startQuestionStream() async {
+        guard let patientID = try? await noteStore.patientProfiles().first?.id,
+              let questions = try? await noteStore.questions(patientID: patientID),
+              !questions.isEmpty,
+              isRecording
+        else {
+            return
+        }
+
+        let shuffledQuestions = questions.shuffled()
+        questionTask?.cancel()
+        questionTask = Task { [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(for: initialQuestionDelay)
+
+            for question in shuffledQuestions {
+                guard !Task.isCancelled, isRecording else { return }
+                currentPromptQuestion = question.text
+                promptedQuestions.append(
+                    DiaryQuestion(id: question.id, text: question.text)
+                )
+                try? await Task.sleep(for: questionInterval)
+            }
+        }
+    }
+
+    private func stopQuestionStream() {
+        questionTask?.cancel()
+        questionTask = nil
+        currentPromptQuestion = nil
     }
 
     private static func newRecordingDestination() -> URL {

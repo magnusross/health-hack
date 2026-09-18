@@ -46,6 +46,31 @@ enum DemoDataSeeder {
             modelContext.insert(profile)
         }
 
+        let existingQuestions = try modelContext.fetch(
+            FetchDescriptor<QuestionRecord>()
+        ).filter { $0.patientID == profile.id }
+        if existingQuestions.isEmpty {
+            let questions = [
+                "What felt most noticeable in your body today?",
+                "Was there a moment when your energy changed?",
+                "What has been sitting on your mind?",
+                "Did anything help you feel more at ease?",
+                "How did you sleep, and how did that shape your day?",
+                "Is there anything you want to remember about today?"
+            ]
+            for text in questions {
+                modelContext.insert(
+                    QuestionRecord(
+                        question: Question(
+                            patientID: profile.id,
+                            promptText: "Gentle recording prompt",
+                            text: text
+                        )
+                    )
+                )
+            }
+        }
+
         let existingEntries = try modelContext.fetch(
             FetchDescriptor<DiaryEntryRecord>()
         )
