@@ -34,7 +34,6 @@ struct ContentView: View {
                             diaryID: diaryID,
                             redoToday: startNewRecording
                         )
-                        .tangentLogoToolbar()
                     case .freshRecording(let diaryID):
                         DailyTangentDetailsView(
                             noteStore: dependencies.noteStore,
@@ -44,13 +43,11 @@ struct ContentView: View {
                             streamsTranscript: true,
                             redoToday: startNewRecording
                         )
-                        .tangentLogoToolbar()
                     case .settings:
                         SettingsView(
                             noteStore: dependencies.noteStore,
                             reminderScheduler: dependencies.reminderScheduler
                         )
-                        .tangentLogoToolbar()
                     }
                 }
             }
@@ -79,7 +76,6 @@ struct ContentView: View {
                             noteStore: dependencies.noteStore,
                             reminderScheduler: dependencies.reminderScheduler
                         )
-                        .tangentLogoToolbar()
                     }
                 }
             }
