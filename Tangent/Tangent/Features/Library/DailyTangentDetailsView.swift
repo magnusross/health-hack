@@ -86,6 +86,7 @@ struct DailyTangentDetailsView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .animation(.easeOut(duration: 0.2), value: model.summaryDisplay)
         .background(Color.tangentWash)
         .navigationTitle("Daily Tangent")
         .navigationBarTitleDisplayMode(.inline)
@@ -109,57 +110,64 @@ struct DailyTangentDetailsView: View {
 
     @ViewBuilder
     private func summarySection(for entry: DiaryEntry) -> some View {
-        VStack(alignment: .leading, spacing: 9) {
-            Text("Summary")
-                .font(.system(.headline, design: .serif))
-                .foregroundStyle(Color.tangentInk)
+        // Nothing is drawn until there is something true to say, so the screen
+        // never claims there is no summary a moment before one appears.
+        if model.summaryDisplay != .nothingYet {
+            VStack(alignment: .leading, spacing: 9) {
+                Text("Summary")
+                    .font(.system(.headline, design: .serif))
+                    .foregroundStyle(Color.tangentInk)
 
-            switch model.summaryState {
-            case .generating:
-                VStack(alignment: .leading, spacing: 12) {
-                    if !model.streamingShortSummary.isEmpty {
-                        summaryText(model.streamingShortSummary)
-                    }
-                    HStack(spacing: 9) {
-                        ProgressView()
-                            .controlSize(.small)
-                        Text("Writing your summary…")
-                            .font(.system(.footnote, design: .serif))
-                            .foregroundStyle(Color.tangentInk.opacity(0.5))
-                    }
-                }
-                .animation(.easeOut(duration: 0.15), value: model.streamingShortSummary)
+                summaryContent
+            }
+            .transition(.opacity)
+        }
+    }
 
-            case .failed(let message, let needsModel):
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(message)
-                        .font(.system(.body, design: .serif))
-                        .foregroundStyle(Color.tangentInk.opacity(0.6))
+    @ViewBuilder
+    private var summaryContent: some View {
+        switch model.summaryDisplay {
+        case .nothingYet:
+            EmptyView()
 
-                    if needsModel, let openSettings {
-                        Button("Choose a model", action: openSettings)
-                            .font(.system(.subheadline, design: .serif, weight: .medium))
-                            .foregroundStyle(Color.tangentPurple)
-                    } else {
-                        Button("Try again") {
-                            Task { await model.regenerate() }
-                        }
-                        .font(.system(.subheadline, design: .serif, weight: .medium))
-                        .foregroundStyle(Color.tangentPurple)
-                    }
-                }
-
-            case .idle:
-                if model.hasSummary {
-                    // Only the short summary belongs on the day's screen. The
-                    // long one is stored for insights to read across days.
-                    summaryText(entry.summaryShort)
-                } else {
-                    Text("No summary has been written for this Tangent yet.")
-                        .font(.system(.body, design: .serif))
-                        .foregroundStyle(Color.tangentInk.opacity(0.6))
+        case .writing(let text):
+            VStack(alignment: .leading, spacing: 10) {
+                summaryText(text)
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Writing…")
+                        .font(.system(.footnote, design: .serif))
+                        .foregroundStyle(Color.tangentInk.opacity(0.45))
                 }
             }
+
+        case .written(let text):
+            summaryText(text)
+
+        case .failed(let message, let needsModel):
+            VStack(alignment: .leading, spacing: 12) {
+                Text(message)
+                    .font(.system(.body, design: .serif))
+                    .foregroundStyle(Color.tangentInk.opacity(0.6))
+
+                if needsModel, let openSettings {
+                    Button("Choose a model", action: openSettings)
+                        .font(.system(.subheadline, design: .serif, weight: .medium))
+                        .foregroundStyle(Color.tangentPurple)
+                } else {
+                    Button("Try again") {
+                        Task { await model.regenerate() }
+                    }
+                    .font(.system(.subheadline, design: .serif, weight: .medium))
+                    .foregroundStyle(Color.tangentPurple)
+                }
+            }
+
+        case .never:
+            Text("No summary has been written for this Tangent yet.")
+                .font(.system(.body, design: .serif))
+                .foregroundStyle(Color.tangentInk.opacity(0.6))
         }
     }
 
@@ -171,6 +179,7 @@ struct DailyTangentDetailsView: View {
                 .foregroundStyle(Color.tangentInk.opacity(0.9))
                 .lineSpacing(6)
                 .textSelection(.enabled)
+                .id("summary")
         }
     }
 

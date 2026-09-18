@@ -14,19 +14,40 @@ struct GeneratedSummary: Equatable, Sendable {
     }
 }
 
+/// A value the model is still writing.
+struct StreamedText: Equatable, Sendable {
+    var text: String
+    /// True once the model has closed the value. The long summary keeps
+    /// generating after this, so the screen has to stop claiming the short one
+    /// is still being written.
+    var isComplete: Bool
+
+    init(text: String, isComplete: Bool) {
+        self.text = text
+        self.isComplete = isComplete
+    }
+}
+
 /// Turns a transcript into a diary summary on device.
 ///
 /// Implementations must be safe to call off the main actor, must not hold any
 /// state between calls, and must honour task cancellation.
 protocol SummaryGenerator: AnyObject, Sendable {
+    /// Loads the selected model into memory if its weights are on disk.
+    ///
+    /// Called when a recording starts so the wait after transcription is
+    /// generation alone, not a cold model load. Best effort: a failure here is
+    /// silent and surfaces later, when a summary is actually asked for.
+    func prepare() async
+
     /// - Parameter onShortSummary: the short summary as it is written, so the
     ///   screen can show it filling in. The long summary follows it and keeps
-    ///   generating after this stops changing.
+    ///   generating after this reports itself complete.
     func generateSummary(
         transcript: String,
         profile: PatientProfile,
         template: SummaryPromptTemplate,
-        onShortSummary: (@Sendable (String) -> Void)?
+        onShortSummary: (@Sendable (StreamedText) -> Void)?
     ) async throws -> GeneratedSummary
 }
 

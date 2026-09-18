@@ -21,6 +21,7 @@ struct RecordHomeView: View {
         audioRecorder: any AudioRecorder,
         transcriber: any Transcriber,
         noteStore: any NoteStore,
+        summaryGenerator: (any SummaryGenerator)? = nil,
         openSettings: @escaping () -> Void,
         onRecordingFinished: @escaping (UUID) -> Void,
         instructionDelay: TimeInterval = 3,
@@ -30,7 +31,8 @@ struct RecordHomeView: View {
             wrappedValue: RecordHomeViewModel(
                 audioRecorder: audioRecorder,
                 transcriber: transcriber,
-                noteStore: noteStore
+                noteStore: noteStore,
+                summaryGenerator: summaryGenerator
             )
         )
         self.openSettings = openSettings

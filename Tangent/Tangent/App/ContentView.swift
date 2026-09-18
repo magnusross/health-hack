@@ -58,6 +58,7 @@ struct ContentView: View {
                     audioRecorder: dependencies.audioRecorder,
                     transcriber: dependencies.transcriber,
                     noteStore: dependencies.noteStore,
+                    summaryGenerator: dependencies.summaryGenerator,
                     openSettings: { recordPath.append(.settings) },
                     onRecordingFinished: showDailySummary(for:)
                 )

@@ -40,8 +40,9 @@ enum SummaryJSON {
     ///
     /// Used to show a summary being written rather than the raw JSON carrying
     /// it. Returns nil until the key's opening quote has appeared; after that
-    /// it returns however much of the value has been generated so far.
-    static func partialValue(of key: String, in text: String) -> String? {
+    /// it returns however much of the value has been generated so far, and
+    /// whether the model has closed it.
+    static func partialValue(of key: String, in text: String) -> StreamedText? {
         guard let keyRange = text.range(of: "\"\(key)\"") else { return nil }
         var index = keyRange.upperBound
 
@@ -61,6 +62,7 @@ enum SummaryJSON {
 
         var raw = ""
         var escaped = false
+        var isComplete = false
         while index < text.endIndex {
             let character = text[index]
             if escaped {
@@ -70,6 +72,7 @@ enum SummaryJSON {
                 raw.append(character)
                 escaped = true
             } else if character == "\"" {
+                isComplete = true
                 break
             } else {
                 raw.append(character)
@@ -77,7 +80,7 @@ enum SummaryJSON {
             index = text.index(after: index)
         }
 
-        return unescape(raw)
+        return StreamedText(text: unescape(raw), isComplete: isComplete)
     }
 
     private static func skipWhitespace(

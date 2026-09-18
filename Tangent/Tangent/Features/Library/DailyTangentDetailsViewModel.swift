@@ -3,21 +3,36 @@ import Foundation
 
 @MainActor
 final class DailyTangentDetailsViewModel: ObservableObject {
-    enum SummaryState: Equatable {
-        case idle
+    private enum SummaryState: Equatable {
+        /// Nothing decided yet: still loading, or transcribing, or about to
+        /// start. The screen says nothing rather than claiming there is no
+        /// summary a moment before writing one.
+        case pending
         case generating
+        case settled
         /// `needsModel` means no weights are on disk, so the fix is in Settings
         /// rather than another attempt.
         case failed(message: String, needsModel: Bool)
     }
 
+    /// What the summary section should show. One value, so the view never has
+    /// to reconcile a state with a half-arrived stream and flicker between them.
+    enum SummaryDisplay: Equatable {
+        case nothingYet
+        case writing(String)
+        case written(String)
+        case failed(message: String, needsModel: Bool)
+        case never
+    }
+
     @Published private(set) var entry: DiaryEntry?
     @Published private(set) var transcript: String?
     @Published private(set) var isTranscribing = false
-    @Published private(set) var summaryState: SummaryState = .idle
-    /// The short summary as the model writes it, shown until the saved entry
-    /// takes over.
-    @Published private(set) var streamingShortSummary = ""
+    // Read through `summaryDisplay`; the raw state is the view model's own.
+    @Published private var summaryState: SummaryState = .pending
+    /// The short summary as the model writes it, until the saved entry takes
+    /// over.
+    @Published private var streamingShortSummary: StreamedText?
     @Published private(set) var loadError: String?
 
     private let noteStore: any NoteStore
@@ -45,6 +60,29 @@ final class DailyTangentDetailsViewModel: ObservableObject {
         return false
     }
 
+    var summaryDisplay: SummaryDisplay {
+        switch summaryState {
+        case .pending:
+            return .nothingYet
+
+        case .failed(let message, let needsModel):
+            return .failed(message: message, needsModel: needsModel)
+
+        case .generating:
+            guard let streaming = streamingShortSummary else { return .nothingYet }
+            // The model closes the short summary long before it finishes the
+            // long one. Once it has, this is finished text, not a work in
+            // progress, and saying otherwise is what made it look stuck.
+            return streaming.isComplete
+                ? .written(streaming.text)
+                : .writing(streaming.text)
+
+        case .settled:
+            let saved = entry?.summaryShort ?? ""
+            return saved.isEmpty ? .never : .written(saved)
+        }
+    }
+
     /// The long summary is written and stored for insights, but the day's
     /// screen shows only the short one.
     var hasSummary: Bool {
@@ -58,6 +96,7 @@ final class DailyTangentDetailsViewModel: ObservableObject {
             await transcribeFreshRecording(animate: streamsTranscript)
         }
         await generateSummaryIfNeeded()
+        if case .pending = summaryState { summaryState = .settled }
     }
 
     func load() async {
@@ -183,7 +222,7 @@ final class DailyTangentDetailsViewModel: ObservableObject {
             return
         }
 
-        streamingShortSummary = ""
+        streamingShortSummary = nil
         summaryState = .generating
         do {
             let generated = try await summaryGenerator.generateSummary(
@@ -204,8 +243,8 @@ final class DailyTangentDetailsViewModel: ObservableObject {
             updated.promptText = generated.promptText
             try await noteStore.saveDiaryEntry(updated)
             self.entry = updated
-            streamingShortSummary = ""
-            summaryState = .idle
+            streamingShortSummary = nil
+            summaryState = .settled
         } catch {
             summaryState = .failed(
                 message: error.localizedDescription,

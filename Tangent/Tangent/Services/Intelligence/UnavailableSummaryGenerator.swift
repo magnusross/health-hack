@@ -4,11 +4,13 @@ import Foundation
 /// the rest of the app behaves exactly as it would on a device without the
 /// model, rather than crashing inside Metal.
 final class UnavailableSummaryGenerator: SummaryGenerator {
+    func prepare() async {}
+
     func generateSummary(
         transcript: String,
         profile: PatientProfile,
         template: SummaryPromptTemplate,
-        onShortSummary: (@Sendable (String) -> Void)?
+        onShortSummary: (@Sendable (StreamedText) -> Void)?
     ) async throws -> GeneratedSummary {
         throw SummaryGenerationError.unsupportedDevice
     }

@@ -14,17 +14,20 @@ final class RecordHomeViewModel: ObservableObject {
     private let audioRecorder: any AudioRecorder
     private let transcriber: any Transcriber
     private let noteStore: any NoteStore
+    private let summaryGenerator: (any SummaryGenerator)?
     private var elapsedTask: Task<Void, Never>?
     private var isFinishing = false
 
     init(
         audioRecorder: any AudioRecorder,
         transcriber: any Transcriber,
-        noteStore: any NoteStore
+        noteStore: any NoteStore,
+        summaryGenerator: (any SummaryGenerator)? = nil
     ) {
         self.audioRecorder = audioRecorder
         self.transcriber = transcriber
         self.noteStore = noteStore
+        self.summaryGenerator = summaryGenerator
     }
 
     var isRecording: Bool { phase == .recording }
@@ -51,6 +54,14 @@ final class RecordHomeViewModel: ObservableObject {
             elapsed = 0
             phase = .recording
             startElapsedTimer()
+
+            // Warm the model while the user talks. By the time they stop and
+            // the transcript is ready, the weights are already in memory.
+            if let summaryGenerator {
+                Task.detached(priority: .utility) {
+                    await summaryGenerator.prepare()
+                }
+            }
         } catch {
             phase = .failed(message: error.localizedDescription)
         }

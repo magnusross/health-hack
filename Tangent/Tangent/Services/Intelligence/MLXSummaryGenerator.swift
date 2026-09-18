@@ -14,11 +14,19 @@ actor MLXSummaryGenerator: SummaryGenerator {
     /// killed on iOS, so switching models drops the previous one.
     private var loaded: (model: SummaryModelID, container: ModelContainer)?
 
+    /// Loads the selected model so a summary asked for moments later does not
+    /// have to wait for weights to come off disk.
+    func prepare() async {
+        let model = SelectedModelStore.selected
+        guard ModelStorage.isDownloaded(model) else { return }
+        _ = try? await container(for: model)
+    }
+
     func generateSummary(
         transcript: String,
         profile: PatientProfile,
         template: SummaryPromptTemplate,
-        onShortSummary: (@Sendable (String) -> Void)?
+        onShortSummary: (@Sendable (StreamedText) -> Void)?
     ) async throws -> GeneratedSummary {
         let transcript = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !transcript.isEmpty else {
@@ -68,7 +76,7 @@ actor MLXSummaryGenerator: SummaryGenerator {
     private func complete(
         prompt: String,
         in container: ModelContainer,
-        onShortSummary: (@Sendable (String) -> Void)?
+        onShortSummary: (@Sendable (StreamedText) -> Void)?
     ) async throws -> String {
         let output = try await container.perform { (context: ModelContext) -> String in
             let input = try await context.processor.prepare(
@@ -79,7 +87,7 @@ actor MLXSummaryGenerator: SummaryGenerator {
             let parameters = GenerateParameters(maxTokens: 800, temperature: 0.2)
 
             var output = ""
-            var reported: String?
+            var reported: StreamedText?
             for await generation in try MLXLMCommon.generate(
                 input: input,
                 parameters: parameters,

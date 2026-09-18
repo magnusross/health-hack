@@ -325,8 +325,16 @@ struct TangentTests {
             #"{"short_summary": "I slept badly."#,
             #"{"short_summary": "I slept badly.", "long_summary": "I woke"#,
         ]
-        let expected: [String?] = [
-            nil, nil, nil, "", "I slept", "I slept badly.", "I slept badly.",
+        let expected: [StreamedText?] = [
+            nil,
+            nil,
+            nil,
+            StreamedText(text: "", isComplete: false),
+            StreamedText(text: "I slept", isComplete: false),
+            StreamedText(text: "I slept badly.", isComplete: false),
+            // The closing quote arrived, so the short summary is finished even
+            // though the long one is still being written.
+            StreamedText(text: "I slept badly.", isComplete: true),
         ]
 
         for (prefix, value) in zip(prefixes, expected) {
@@ -338,22 +346,22 @@ struct TangentTests {
     func partialValueHandlesEscapesArrivingOneCharacterAtATime() {
         let complete = #"{"short_summary": "I said \"fine\" and meant it"#
         #expect(
-            SummaryJSON.partialValue(of: "short_summary", in: complete)
+            SummaryJSON.partialValue(of: "short_summary", in: complete)?.text
                 == #"I said "fine" and meant it"#
         )
 
         // A backslash with nothing after it yet is dropped rather than shown.
         #expect(
-            SummaryJSON.partialValue(of: "short_summary", in: #"{"short_summary": "I said \"#)
+            SummaryJSON.partialValue(of: "short_summary", in: #"{"short_summary": "I said \"#)?.text
                 == "I said "
         )
         // Half a unicode escape is dropped too.
         #expect(
-            SummaryJSON.partialValue(of: "short_summary", in: #"{"short_summary": "caf\u00"#)
+            SummaryJSON.partialValue(of: "short_summary", in: #"{"short_summary": "caf\u00"#)?.text
                 == "caf"
         )
         #expect(
-            SummaryJSON.partialValue(of: "short_summary", in: #"{"short_summary": "caf\u00e9."#)
+            SummaryJSON.partialValue(of: "short_summary", in: #"{"short_summary": "caf\u00e9."#)?.text
                 == "café."
         )
     }
