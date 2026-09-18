@@ -1,0 +1,353 @@
+TASK: Implement Workflow 01 — Diary of Tangents (Home Screen)
+
+Read `rules.txt` first and follow the architecture established by `00_init_workflow.txt`.
+
+This task implements the main/home screen of Tangent: the user's chronological health diary.
+
+Do not redesign unrelated screens or bypass the Domain/Data architecture.
+
+--------------------------------------------------
+PURPOSE
+--------------------------------------------------
+
+The Diary of Tangents screen gives the user a simple chronological view of their daily Tangent diary entries.
+
+The visual style should feel like reading a simple diary or Kindle:
+- minimal
+- calm
+- text-focused
+- lots of whitespace
+- very limited use of colour
+- avoid visually heavy cards, gradients, or decorative UI
+
+The main accent colour should only be used sparingly, primarily for the Record action.
+
+--------------------------------------------------
+LAYOUT
+--------------------------------------------------
+
+Screen structure:
+
+1. Main chronological diary timeline
+2. Settings control in the top-right
+3. Bottom navigation:
+   - Diary / Home: book icon
+   - Record: microphone icon
+   - Insights: lightbulb icon
+
+Settings is NOT part of the bottom navigation.
+
+--------------------------------------------------
+SETTINGS BUTTON
+--------------------------------------------------
+
+Place a very minimal settings icon in the top-right.
+
+Do not use a large gear icon.
+
+The desired visual is approximately:
+- two small outlined circles
+- connected/aligned with a thin line
+- extremely simple line-art appearance
+
+A suitable SF Symbol may be used if visually close, otherwise create a lightweight custom SwiftUI icon.
+
+Tapping it navigates to workflow:
+`04_settings`
+
+--------------------------------------------------
+DIARY TIMELINE
+--------------------------------------------------
+
+The diary runs chronologically downward:
+
+oldest
+↓
+↓
+newest / today
+
+Older dates appear toward the top.
+Newer dates appear toward the bottom.
+
+For every calendar day from the oldest diary entry being displayed through today, render that day in the timeline.
+
+Example:
+
+12 SAT   [diary summary]
+13 SUN   [diary summary]
+14 MON
+15 TUE   [diary summary]
+
+If a historical day has no diary entry:
+- show only the date/day
+- do NOT display an empty card
+- do NOT display "No Tangent"
+- do NOT display placeholder content
+
+--------------------------------------------------
+DATE DISPLAY
+--------------------------------------------------
+
+Each day should have a compact date/day label such as:
+
+12
+SAT
+
+or an equivalent clean stacked representation.
+
+Keep the styling minimal and readable.
+
+--------------------------------------------------
+COMPLETED DIARY ENTRY
+--------------------------------------------------
+
+If a diary entry exists for a day:
+
+Display:
+- date/day
+- `DIARY.summary_short`
+
+The summary should contain the actual short summary text.
+
+Do not allow long summaries to turn the home screen into blocks of text.
+
+Use approximately:
+- maximum 2–3 visible lines
+- SwiftUI line limiting
+- tail truncation using `...`
+
+Prefer line-based truncation over a hard character cut because it behaves better across device widths and accessibility text sizes.
+
+The user should be able to tap anywhere on the diary entry row/card.
+
+Tapping it navigates to:
+`03_daily_tangent_details`
+
+Pass the selected DiaryEntry / diary ID to that workflow.
+
+--------------------------------------------------
+TODAY — NOT YET RECORDED
+--------------------------------------------------
+
+If there is NO diary entry for today:
+
+Today should appear as the current point in the chronological timeline.
+
+Instead of a diary summary, prominently display:
+
+"Record Today's Tangent"
+
+This is NOT inside a circle.
+
+The text/action itself should be the focal point.
+
+Style:
+- minimal
+- may use Tangent Purple or Sky
+- subtle pulsing animation is acceptable
+- avoid large colourful backgrounds
+
+Make the touch target significantly larger than the visible text so the user does not need to tap precisely on the letters.
+
+Tapping this area navigates to:
+`02_record_of_tangents`
+
+--------------------------------------------------
+TODAY — COMPLETED
+--------------------------------------------------
+
+If today's diary entry already exists:
+
+Do NOT display the "Record Today's Tangent" CTA.
+
+Render today exactly like any other completed diary entry:
+
+date/day + summary_short
+
+The bottom microphone navigation item may still navigate to the Record workflow, but the home screen itself should reflect that today's diary has already been completed.
+
+--------------------------------------------------
+DATA
+--------------------------------------------------
+
+Use the existing `NoteStore` abstraction.
+
+Do not query SwiftData directly from the Feature layer if the initialization workflow has created the repository abstraction correctly.
+
+Retrieve DiaryEntry records required for the timeline.
+
+Relevant fields:
+
+DIARY:
+- id
+- patient_id
+- day
+- summary_short
+- summary_long
+- questions
+- prompt_text
+- transcript_path
+
+The Home screen only needs to display:
+- day
+- summary_short
+
+Use diary IDs / models for navigation rather than duplicating diary content.
+
+--------------------------------------------------
+PATIENT SCOPE
+--------------------------------------------------
+
+Display diary entries belonging to the current patient only.
+
+Do not mix data belonging to different patient IDs.
+
+--------------------------------------------------
+BOTTOM NAVIGATION
+--------------------------------------------------
+
+Create/preserve the persistent bottom navigation with exactly three primary destinations:
+
+1. Book icon
+   Diary of Tangents
+   current screen
+
+2. Microphone icon
+   Record Tangent
+   navigates to `02_record_of_tangents`
+
+3. Lightbulb icon
+   Insights
+   navigates to `05_insights`
+
+Keep this navigation visually lightweight.
+
+Avoid a large colourful tab bar.
+
+--------------------------------------------------
+VISUAL DESIGN
+--------------------------------------------------
+
+The screen should primarily use:
+
+- Wash / light neutral background
+- Ink for text
+- subtle neutral separators if required
+- Purple or Sky sparingly for the Record action
+
+Do NOT make every diary entry a different colour.
+
+Do NOT heavily use Purple, Lilac, Gold, and Sky simultaneously.
+
+The intended feeling is closer to:
+- a paper diary
+- Kindle
+- simple written notes
+
+rather than a dashboard.
+
+Diary entries may have a very subtle boundary/background if needed for tappability, but they should not look like large colourful dashboard cards.
+
+--------------------------------------------------
+SCROLLING
+--------------------------------------------------
+
+Use a vertically scrollable diary timeline.
+
+Do not use horizontal scrolling.
+
+Do not use a carousel.
+
+The chronological structure should remain visually obvious while scrolling.
+
+--------------------------------------------------
+EMPTY STATE
+--------------------------------------------------
+
+If the user has no previous diary entries:
+
+Do not create fake/sample diary data.
+
+Show today's date and the:
+
+"Record Today's Tangent"
+
+action.
+
+Keep the screen otherwise intentionally sparse.
+
+--------------------------------------------------
+ACCESSIBILITY
+--------------------------------------------------
+
+Ensure:
+
+- tappable diary entries have sufficiently large touch targets
+- Record CTA has a large invisible/visual hit area
+- VoiceOver labels describe navigation icons
+- Dynamic Type does not break the layout
+- truncated summaries remain accessible through the Daily Tangent Details screen
+
+--------------------------------------------------
+OUT OF SCOPE
+--------------------------------------------------
+
+Do NOT implement:
+
+- audio recording
+- transcription
+- MedGemma
+- summary generation
+- notification scheduling
+- streak calculations
+- insight generation
+- settings functionality beyond navigation
+- Daily Tangent Details content beyond navigation
+- backend/cloud sync
+
+Those belong to other workflows.
+
+--------------------------------------------------
+VERIFICATION
+--------------------------------------------------
+
+Verify at least these states:
+
+STATE 1 — No diary recorded today
+- previous entries visible
+- historical missing days shown as date only
+- "Record Today's Tangent" visible
+- tapping Record navigates correctly
+
+STATE 2 — Diary recorded today
+- today's summary appears
+- Record CTA is absent
+
+STATE 3 — Missing historical days
+Example:
+12 SAT -> entry
+13 SUN -> entry
+14 MON -> date only
+15 TUE -> entry
+
+STATE 4 — No diary history
+- today's date visible
+- Record CTA visible
+- no fake diary entries
+
+Also verify:
+- diary rows open Daily Tangent Details
+- settings icon navigates correctly
+- bottom navigation works
+- app builds successfully
+- existing architecture remains intact
+
+--------------------------------------------------
+GIT
+--------------------------------------------------
+
+Keep this workflow isolated from unrelated changes.
+
+Commit the completed implementation with an appropriate message, e.g.:
+
+feat: implement Diary of Tangents home workflow
