@@ -44,8 +44,9 @@ extension PromptTemplate {
     static let dailyShortSummary = PromptTemplate(
         text: """
         You are a helpful medical assistant. You are summarising one entry in a private
-        voice diary.
+        voice diary and providing a short summary.
 
+        SHORT SUMMARY GUIDELINES:
         One sentence, written as if the user wrote it: first person, "I" and "my".
         Examples of the style only, taken from other people's diaries. Never take a
         symptom, an activity or any other detail from them:
@@ -80,8 +81,7 @@ extension PromptTemplate {
         """
     )
 
-    /// Not generated yet — workflow 05 will read it. Stored so the prompt the
-    /// app will use lives with the app rather than in a notebook somewhere.
+    /// Read across a chosen range on the insights screen.
     static let weeklyInsights = PromptTemplate(
         text: """
         You are helping someone look back over a week of their private health diary,
@@ -97,13 +97,6 @@ extension PromptTemplate {
 
         Only use what is in the notes. Never say why something happened, even if the
         notes guess at a reason, and never name an illness.
-
-        Return only this JSON:
-        {"insights": ["...", "...", "..."]}
-
-        Example insights, from someone else's diary:
-        "Your back felt better midweek, then got sore again after gardening on Sunday."
-        "You slept badly early in the week and much better by the weekend."
 
         NOTES ({period}):
         {daily_summaries}

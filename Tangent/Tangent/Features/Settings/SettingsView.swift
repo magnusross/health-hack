@@ -32,6 +32,8 @@ struct SettingsView: View {
         .background(Color.tangentWash)
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .tabBar)
+        .toolbarVisibility(.hidden, for: .tabBar)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Edit") {}
@@ -89,8 +91,27 @@ struct SettingsView: View {
         Section("Daily reminder") {
             Toggle("Reminder", isOn: reminderBinding)
                 .disabled(model.isUpdatingReminder || model.isLoading)
-            LabeledContent("Time", value: model.formattedReminderTime)
+
+            DatePicker(
+                "Time",
+                selection: reminderTimeBinding,
+                displayedComponents: .hourAndMinute
+            )
+            .disabled(
+                !model.reminderEnabled
+                    || model.isUpdatingReminder
+                    || model.isLoading
+            )
         }
+    }
+
+    private var reminderTimeBinding: Binding<Date> {
+        Binding(
+            get: { model.dailyReminder },
+            set: { time in
+                Task { await model.setReminderTime(time) }
+            }
+        )
     }
 
     private var reminderBinding: Binding<Bool> {

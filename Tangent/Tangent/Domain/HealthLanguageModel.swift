@@ -1,7 +1,7 @@
 import Foundation
 
 /// Text a model wrote, with the filled prompt that produced it. The prompt is
-/// what `DIARY.prompt_text` persists.
+/// what `prompt_text` persists on whichever row used it.
 struct GeneratedText: Equatable, Sendable {
     var text: String
     var promptText: String
@@ -12,15 +12,16 @@ struct GeneratedText: Equatable, Sendable {
     }
 }
 
-/// Turns a transcript into diary summaries on device.
+/// Everything Tangent asks a language model for, all of it on device.
 ///
-/// The two summaries are separate calls rather than one structured reply. The
-/// short one is all the user waits for, so it is asked for on its own and comes
-/// back in seconds; the long one is for insights and finishes in its own time.
+/// The two daily summaries are separate calls rather than one structured
+/// reply. The short one is all the user waits for, so it is asked for on its
+/// own and comes back in seconds; the long one is for insights and finishes in
+/// its own time.
 ///
 /// Implementations must be safe to call off the main actor, must not hold any
 /// state between calls, and must honour task cancellation.
-protocol SummaryGenerator: AnyObject, Sendable {
+protocol HealthLanguageModel: AnyObject, Sendable {
     /// Loads the selected model into memory if its weights are on disk.
     ///
     /// Called when a recording starts so the wait after transcription is
@@ -40,9 +41,20 @@ protocol SummaryGenerator: AnyObject, Sendable {
         transcript: String,
         profile: PatientProfile
     ) async throws -> GeneratedText
+
+    /// Reads across days. `period` names the range back to the reader, e.g.
+    /// "7 to 13 September".
+    ///
+    /// - Parameter onPartial: the insights as they are written, so the screen
+    ///   fills in rather than waiting behind a spinner.
+    func generateInsights(
+        from entries: [DiaryEntry],
+        period: String,
+        onPartial: (@Sendable (String) -> Void)?
+    ) async throws -> GeneratedText
 }
 
-enum SummaryGenerationError: LocalizedError, Equatable {
+enum HealthLanguageModelError: LocalizedError, Equatable {
     /// No Metal GPU, so no on-device inference. The Simulator lands here.
     case unsupportedDevice
     case modelNotDownloaded(SummaryModelID)
@@ -50,6 +62,7 @@ enum SummaryGenerationError: LocalizedError, Equatable {
     /// The model answered with nothing usable.
     case unusableOutput
     case emptyTranscript
+    case notEnoughEntries
     case cancelled
 
     var errorDescription: String? {
@@ -64,6 +77,8 @@ enum SummaryGenerationError: LocalizedError, Equatable {
             "The model did not return a usable summary."
         case .emptyTranscript:
             "There is nothing to summarise yet."
+        case .notEnoughEntries:
+            "There are no Tangents in this range to look back over."
         case .cancelled:
             "Summary generation was cancelled."
         }

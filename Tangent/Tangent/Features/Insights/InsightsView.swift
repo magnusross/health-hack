@@ -3,58 +3,144 @@ import SwiftUI
 struct InsightsView: View {
     @StateObject private var model: InsightsViewModel
 
-    init(noteStore: any NoteStore) {
+    init(
+        noteStore: any NoteStore,
+        healthModel: any HealthLanguageModel
+    ) {
         _model = StateObject(
-            wrappedValue: InsightsViewModel(noteStore: noteStore)
+            wrappedValue: InsightsViewModel(
+                noteStore: noteStore,
+                healthModel: healthModel
+            )
         )
     }
 
     var body: some View {
-        Group {
-            if model.isLoading && model.insights.isEmpty {
-                ProgressView()
-                    .tint(Color.tangentPurple)
-            } else if let loadError = model.loadError {
-                ContentUnavailableView(
-                    "Unable to load insights",
-                    systemImage: "exclamationmark.circle",
-                    description: Text(loadError)
-                )
-            } else if model.insights.isEmpty {
-                ContentUnavailableView(
-                    "No insights yet",
-                    systemImage: "lightbulb",
-                    description: Text(
-                        "Insights will appear as your diary grows."
-                    )
-                )
-            } else {
-                insightsList
-            }
-        }
+        insightsContent
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .foregroundStyle(Color.tangentInk)
         .background(Color.tangentWash)
         .navigationTitle("Insights")
         .navigationBarTitleDisplayMode(.inline)
-        .task {
-            await model.load()
+    }
+
+    private var insightsContent: some View {
+        GeometryReader { proxy in
+            ScrollView {
+                VStack(spacing: 24) {
+                    generator
+
+                    if model.isGenerating {
+                        // The words themselves say it is working, so there is
+                        // nothing to spin until the first one arrives.
+                        if model.streamingInsight.isEmpty {
+                            waitingIndicator
+                        } else {
+                            streamingBlock(model.streamingInsight)
+                        }
+                    } else if let insight = model.generatedInsight {
+                        insightBlock(insight)
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+                .frame(
+                    maxWidth: .infinity,
+                    minHeight: proxy.size.height,
+                    alignment: .center
+                )
+            }
         }
     }
 
-    private var insightsList: some View {
-        ScrollView {
-            LazyVStack(spacing: 16) {
-                ForEach(model.insights) { insight in
-                    insightBlock(insight)
+    private var waitingIndicator: some View {
+        TimelineView(.periodic(from: .now, by: 0.4)) { context in
+            let step = Int(
+                context.date.timeIntervalSinceReferenceDate / 0.4
+            ) % 3 + 1
+            Text(String(repeating: ".", count: step))
+                .font(.system(.title, design: .monospaced, weight: .semibold))
+                .foregroundStyle(Color.tangentPurple)
+                .frame(width: 52, height: 44, alignment: .leading)
+                .accessibilityLabel("Generating insight")
+        }
+    }
+
+    private var generator: some View {
+        VStack(spacing: 18) {
+            Text("Generate insight")
+                .font(.system(.title2, weight: .semibold))
+
+            DatePicker(
+                "From",
+                selection: Binding(
+                    get: { model.fromDate },
+                    set: model.setFromDate
+                ),
+                in: model.earliestFromDate...model.toDate,
+                displayedComponents: .date
+            )
+
+            DatePicker(
+                "To",
+                selection: Binding(
+                    get: { model.toDate },
+                    set: model.setToDate
+                ),
+                in: ...model.latestToDate,
+                displayedComponents: .date
+            )
+
+            Button {
+                Task { await model.generateInsight() }
+            } label: {
+                Group {
+                    if model.isGenerating {
+                        ProgressView()
+                            .tint(.white)
+                    } else {
+                        Text("Generate")
+                    }
                 }
+                .font(.system(.body, weight: .semibold))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 13)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
+            .buttonStyle(.borderedProminent)
+            .tint(Color.tangentPurple)
+            .disabled(model.isGenerating)
+
+            if let generationError = model.generationError {
+                Text(generationError)
+                    .font(.system(.footnote))
+                    .foregroundStyle(.red)
+            }
         }
-        .refreshable {
-            await model.load()
+        .padding(20)
+        .frame(maxWidth: 420)
+        .background(Color.tangentPaper.opacity(0.82))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.tangentInk.opacity(0.06), lineWidth: 1)
         }
+    }
+
+    private func streamingBlock(_ text: String) -> some View {
+        Text(text)
+            .font(.system(.body))
+            .foregroundStyle(Color.tangentInk)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(18)
+            .background(Color.tangentPaper.opacity(0.82))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.tangentInk.opacity(0.06), lineWidth: 1)
+            }
+            .frame(maxWidth: 420)
+            .animation(.easeOut(duration: 0.15), value: text)
     }
 
     private func insightBlock(_ insight: Insight) -> some View {
@@ -94,7 +180,8 @@ struct InsightsView: View {
     let container = try! TangentModelContainer.make(inMemory: true)
     NavigationStack {
         InsightsView(
-            noteStore: SwiftDataNoteStore(modelContext: container.mainContext)
+            noteStore: SwiftDataNoteStore(modelContext: container.mainContext),
+            healthModel: UnavailableHealthLanguageModel()
         )
     }
 }

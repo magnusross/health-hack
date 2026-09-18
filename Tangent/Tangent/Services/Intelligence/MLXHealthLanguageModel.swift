@@ -10,7 +10,7 @@ import Tokenizers
 ///
 /// An actor so generation is serialised and never touches the main thread, and
 /// so the loaded model has one owner.
-actor MLXSummaryGenerator: SummaryGenerator {
+actor MLXHealthLanguageModel: HealthLanguageModel {
     /// Read with: log stream --device --predicate 'subsystem == "Personal.Tangent"'
     private static let log = Logger(subsystem: "Personal.Tangent", category: "Summary")
 
@@ -75,6 +75,61 @@ actor MLXSummaryGenerator: SummaryGenerator {
         return try await work.value
     }
 
+    /// Reads the notes from a range of days and writes what stands out.
+    ///
+    /// The notes are what the long summaries are for; entries without one fall
+    /// back to their sentence so a day is never silently dropped.
+    func generateInsights(
+        from entries: [DiaryEntry],
+        period: String,
+        onPartial: (@Sendable (String) -> Void)?
+    ) async throws -> GeneratedText {
+        let days = entries
+            .sorted { $0.day < $1.day }
+            .compactMap(Self.noteLine)
+        guard !days.isEmpty else {
+            throw HealthLanguageModelError.notEnoughEntries
+        }
+
+        let model = SelectedModelStore.selected
+        guard ModelStorage.isDownloaded(model) else {
+            throw HealthLanguageModelError.modelNotDownloaded(model)
+        }
+
+        let container = try await container(for: model)
+        let prompt = PromptTemplate.weeklyInsights.filled(
+            period: period,
+            dailySummaries: days
+        )
+
+        let raw = try await complete(
+            prompt: prompt,
+            in: container,
+            maxTokens: 400,
+            label: "insights · \(model.displayName)",
+            onPartial: onPartial
+        )
+
+        try Task.checkCancellation()
+
+        let text = SummaryText.clean(raw)
+        guard !text.isEmpty else {
+            throw HealthLanguageModelError.unusableOutput
+        }
+
+        return GeneratedText(text: text, promptText: prompt)
+    }
+
+    private static func noteLine(for entry: DiaryEntry) -> String? {
+        let notes = entry.summaryLong.trimmingCharacters(in: .whitespacesAndNewlines)
+        let sentence = entry.summaryShort.trimmingCharacters(in: .whitespacesAndNewlines)
+        let body = notes.isEmpty ? sentence : notes
+        guard !body.isEmpty else { return nil }
+
+        let day = entry.day.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))
+        return "\(day): \(body)"
+    }
+
     private func generate(
         using template: PromptTemplate,
         transcript: String,
@@ -85,12 +140,12 @@ actor MLXSummaryGenerator: SummaryGenerator {
     ) async throws -> GeneratedText {
         let transcript = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !transcript.isEmpty else {
-            throw SummaryGenerationError.emptyTranscript
+            throw HealthLanguageModelError.emptyTranscript
         }
 
         let model = SelectedModelStore.selected
         guard ModelStorage.isDownloaded(model) else {
-            throw SummaryGenerationError.modelNotDownloaded(model)
+            throw HealthLanguageModelError.modelNotDownloaded(model)
         }
 
         let container = try await container(for: model)
@@ -108,7 +163,7 @@ actor MLXSummaryGenerator: SummaryGenerator {
 
         let text = SummaryText.clean(raw)
         guard !text.isEmpty else {
-            throw SummaryGenerationError.unusableOutput
+            throw HealthLanguageModelError.unusableOutput
         }
 
         return GeneratedText(text: text, promptText: prompt)
@@ -204,7 +259,7 @@ actor MLXSummaryGenerator: SummaryGenerator {
             )
             return container
         } catch {
-            throw SummaryGenerationError.modelLoadFailed(error.localizedDescription)
+            throw HealthLanguageModelError.modelLoadFailed(error.localizedDescription)
         }
     }
 }

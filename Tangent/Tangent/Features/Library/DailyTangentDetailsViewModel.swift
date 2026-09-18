@@ -36,7 +36,7 @@ final class DailyTangentDetailsViewModel: ObservableObject {
 
     private let noteStore: any NoteStore
     private let transcriber: (any Transcriber)?
-    private let summaryGenerator: (any SummaryGenerator)?
+    private let healthModel: (any HealthLanguageModel)?
     private let diaryID: UUID
     let streamsTranscript: Bool
     /// Unstructured on purpose: the user only waits for the sentence, so the
@@ -46,13 +46,13 @@ final class DailyTangentDetailsViewModel: ObservableObject {
     init(
         noteStore: any NoteStore,
         transcriber: (any Transcriber)? = nil,
-        summaryGenerator: (any SummaryGenerator)? = nil,
+        healthModel: (any HealthLanguageModel)? = nil,
         diaryID: UUID,
         streamsTranscript: Bool = false
     ) {
         self.noteStore = noteStore
         self.transcriber = transcriber
-        self.summaryGenerator = summaryGenerator
+        self.healthModel = healthModel
         self.diaryID = diaryID
         self.streamsTranscript = streamsTranscript
     }
@@ -189,6 +189,7 @@ final class DailyTangentDetailsViewModel: ObservableObject {
         entry.transcriptPath = storedPath
         try await noteStore.saveDiaryEntry(entry)
         self.entry = entry
+
         if audioPath != storedPath {
             try? FileManager.default.removeItem(
                 at: URL(fileURLWithPath: audioPath)
@@ -214,12 +215,12 @@ final class DailyTangentDetailsViewModel: ObservableObject {
     }
 
     private func generateSummary(profile: PatientProfile, transcript: String) async {
-        guard let summaryGenerator, let entry else { return }
+        guard let healthModel, let entry else { return }
 
         streamingShortSummary = ""
         summaryState = .generating
         do {
-            let short = try await summaryGenerator.generateShortSummary(
+            let short = try await healthModel.generateShortSummary(
                 transcript: transcript,
                 profile: profile,
                 onPartial: { [weak self] partial in
@@ -248,7 +249,7 @@ final class DailyTangentDetailsViewModel: ObservableObject {
     }
 
     private func startLongSummary(profile: PatientProfile, transcript: String) {
-        guard let summaryGenerator,
+        guard let healthModel,
               let entry,
               entry.summaryLong.isEmpty,
               longSummaryTask == nil
@@ -259,7 +260,7 @@ final class DailyTangentDetailsViewModel: ObservableObject {
         longSummaryTask = Task {
             defer { longSummaryTask = nil }
             do {
-                let long = try await summaryGenerator.generateLongSummary(
+                let long = try await healthModel.generateLongSummary(
                     transcript: transcript,
                     profile: profile
                 )
@@ -286,7 +287,7 @@ final class DailyTangentDetailsViewModel: ObservableObject {
     }
 
     private static func needsModel(_ error: Error) -> Bool {
-        guard let error = error as? SummaryGenerationError else { return false }
+        guard let error = error as? HealthLanguageModelError else { return false }
         if case .modelNotDownloaded = error { return true }
         return false
     }

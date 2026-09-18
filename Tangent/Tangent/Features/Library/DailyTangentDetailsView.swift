@@ -9,7 +9,7 @@ struct DailyTangentDetailsView: View {
     init(
         noteStore: any NoteStore,
         transcriber: (any Transcriber)? = nil,
-        summaryGenerator: (any SummaryGenerator)? = nil,
+        healthModel: (any HealthLanguageModel)? = nil,
         diaryID: UUID,
         streamsTranscript: Bool = false,
         calendar: Calendar = .autoupdatingCurrent,
@@ -20,7 +20,7 @@ struct DailyTangentDetailsView: View {
             wrappedValue: DailyTangentDetailsViewModel(
                 noteStore: noteStore,
                 transcriber: transcriber,
-                summaryGenerator: summaryGenerator,
+                healthModel: healthModel,
                 diaryID: diaryID,
                 streamsTranscript: streamsTranscript
             )
@@ -90,6 +90,7 @@ struct DailyTangentDetailsView: View {
         .background(Color.tangentWash)
         .navigationTitle("Daily Tangent")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
         .task {
             await model.start()
         }

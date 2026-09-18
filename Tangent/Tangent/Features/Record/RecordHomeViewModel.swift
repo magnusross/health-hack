@@ -10,24 +10,38 @@ final class RecordHomeViewModel: ObservableObject {
 
     @Published private(set) var phase: Phase = .idle
     @Published private(set) var elapsed: TimeInterval = 0
+    @Published private(set) var currentPromptQuestion: String?
+    @Published private(set) var promptedQuestions: [DiaryQuestion] = []
+    @Published private(set) var showsQuestionSuggestionOffer = false
 
     private let audioRecorder: any AudioRecorder
     private let transcriber: any Transcriber
     private let noteStore: any NoteStore
-    private let summaryGenerator: (any SummaryGenerator)?
+    private let healthModel: (any HealthLanguageModel)?
     private var elapsedTask: Task<Void, Never>?
+    private var questionTask: Task<Void, Never>?
+    private var suggestionOfferTask: Task<Void, Never>?
     private var isFinishing = false
+    private let initialQuestionDelay: Duration
+    private let questionInterval: Duration
+    private let questionTransitionDelay: Duration
 
     init(
         audioRecorder: any AudioRecorder,
         transcriber: any Transcriber,
         noteStore: any NoteStore,
-        summaryGenerator: (any SummaryGenerator)? = nil
+        healthModel: (any HealthLanguageModel)? = nil,
+        initialQuestionDelay: Duration = .seconds(3),
+        questionInterval: Duration = .seconds(10),
+        questionTransitionDelay: Duration = .milliseconds(2200)
     ) {
         self.audioRecorder = audioRecorder
         self.transcriber = transcriber
         self.noteStore = noteStore
-        self.summaryGenerator = summaryGenerator
+        self.healthModel = healthModel
+        self.initialQuestionDelay = initialQuestionDelay
+        self.questionInterval = questionInterval
+        self.questionTransitionDelay = questionTransitionDelay
     }
 
     var isRecording: Bool { phase == .recording }
@@ -52,14 +66,18 @@ final class RecordHomeViewModel: ObservableObject {
         do {
             try await audioRecorder.startRecording(to: Self.newRecordingDestination())
             elapsed = 0
+            promptedQuestions = []
+            currentPromptQuestion = nil
+            showsQuestionSuggestionOffer = false
             phase = .recording
             startElapsedTimer()
+            scheduleQuestionSuggestionOffer()
 
             // Warm the model while the user talks. By the time they stop and
             // the transcript is ready, the weights are already in memory.
-            if let summaryGenerator {
+            if let healthModel {
                 Task.detached(priority: .utility) {
-                    await summaryGenerator.prepare()
+                    await healthModel.prepare()
                 }
             }
         } catch {
@@ -73,12 +91,17 @@ final class RecordHomeViewModel: ObservableObject {
         guard phase == .recording, !isFinishing else { return nil }
         isFinishing = true
         stopElapsedTimer()
+        stopSuggestionOffer()
+        stopQuestionStream()
         phase = .idle
         defer { isFinishing = false }
 
         do {
             let recordingURL = try await audioRecorder.stopRecording()
-            return try await saveTodayEntry(transcriptPath: recordingURL.path)
+            return try await saveTodayEntry(
+                transcriptPath: recordingURL.path,
+                questions: promptedQuestions
+            )
         } catch {
             phase = .failed(message: error.localizedDescription)
             return nil
@@ -87,23 +110,31 @@ final class RecordHomeViewModel: ObservableObject {
 
     deinit {
         elapsedTask?.cancel()
+        questionTask?.cancel()
+        suggestionOfferTask?.cancel()
     }
 
-    /// Saves the entry with the audio path only. The transcript and both
-    /// summaries are filled in on the daily details screen.
-    private func saveTodayEntry(transcriptPath: String) async throws -> UUID {
+    func acceptQuestionSuggestions() async {
+        guard isRecording, showsQuestionSuggestionOffer else { return }
+        stopSuggestionOffer()
+        await startQuestionStream()
+    }
+
+    /// Saves the entry with the audio path and the questions the patient was
+    /// actually shown. The transcript and both summaries are filled in on the
+    /// daily details screen.
+    private func saveTodayEntry(
+        transcriptPath: String,
+        questions: [DiaryQuestion]
+    ) async throws -> UUID {
         guard let patient = try await noteStore.patientProfiles().first else {
             throw RecordPersistenceError.missingProfile
         }
 
-        // The questions are snapshotted onto the entry, so history keeps the
-        // questions that were actually asked even if the standing set changes.
-        let questions = try await noteStore.questions(patientID: patient.id)
-
         let entry = DiaryEntry(
             patientID: patient.id,
             day: Date(),
-            questions: questions.map { DiaryQuestion(text: $0.text) },
+            questions: questions,
             promptText: "Daily Tangent recorded and transcribed on device",
             transcriptPath: transcriptPath
         )
@@ -140,6 +171,59 @@ final class RecordHomeViewModel: ObservableObject {
     private func stopElapsedTimer() {
         elapsedTask?.cancel()
         elapsedTask = nil
+    }
+
+    private func startQuestionStream() async {
+        guard let patientID = try? await noteStore.patientProfiles().first?.id,
+              let questions = try? await noteStore.questions(patientID: patientID),
+              !questions.isEmpty,
+              isRecording
+        else {
+            return
+        }
+
+        let shuffledQuestions = questions.shuffled()
+        questionTask?.cancel()
+        questionTask = Task { [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(for: questionTransitionDelay)
+
+            for question in shuffledQuestions {
+                guard !Task.isCancelled, isRecording else { return }
+                currentPromptQuestion = question.text
+                if !promptedQuestions.contains(where: { $0.id == question.id }) {
+                    promptedQuestions.append(
+                        DiaryQuestion(id: question.id, text: question.text)
+                    )
+                }
+                try? await Task.sleep(for: questionInterval)
+                guard !Task.isCancelled, isRecording else { return }
+                currentPromptQuestion = nil
+                try? await Task.sleep(for: questionTransitionDelay)
+            }
+        }
+    }
+
+    private func stopQuestionStream() {
+        questionTask?.cancel()
+        questionTask = nil
+        currentPromptQuestion = nil
+    }
+
+    private func scheduleQuestionSuggestionOffer() {
+        suggestionOfferTask?.cancel()
+        suggestionOfferTask = Task { [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(for: initialQuestionDelay)
+            guard !Task.isCancelled, isRecording else { return }
+            showsQuestionSuggestionOffer = true
+        }
+    }
+
+    private func stopSuggestionOffer() {
+        suggestionOfferTask?.cancel()
+        suggestionOfferTask = nil
+        showsQuestionSuggestionOffer = false
     }
 
     private static func newRecordingDestination() -> URL {

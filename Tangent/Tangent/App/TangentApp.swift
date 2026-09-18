@@ -26,9 +26,9 @@ struct TangentApp: App {
                 ),
                 audioRecorder: AVAudioRecorderService(),
                 transcriber: OnDeviceTranscriber(),
-                reminderScheduler: LocalReminderScheduler(),
-                summaryGenerator: Self.makeSummaryGenerator(),
-                modelCatalog: MLXModelCatalog()
+                healthModel: Self.makeHealthModel(),
+                modelCatalog: MLXModelCatalog(),
+                reminderScheduler: LocalReminderScheduler()
             )
         } catch {
             fatalError("Unable to initialize Tangent persistence: \(error)")
@@ -37,11 +37,11 @@ struct TangentApp: App {
 
     /// MLX needs a Metal GPU, which the simulator does not have. Summaries
     /// then fail cleanly instead of crashing inside Metal.
-    private static func makeSummaryGenerator() -> any SummaryGenerator {
+    private static func makeHealthModel() -> any HealthLanguageModel {
         #if targetEnvironment(simulator)
-        UnavailableSummaryGenerator()
+        UnavailableHealthLanguageModel()
         #else
-        MLXSummaryGenerator()
+        MLXHealthLanguageModel()
         #endif
     }
 

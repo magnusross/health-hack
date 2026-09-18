@@ -2,7 +2,7 @@ struct AppDependencies {
     let noteStore: any NoteStore
     let audioRecorder: any AudioRecorder
     let transcriber: any Transcriber
-    let reminderScheduler: any ReminderScheduler
-    let summaryGenerator: any SummaryGenerator
+    let healthModel: any HealthLanguageModel
     let modelCatalog: any ModelCatalog
+    let reminderScheduler: any ReminderScheduler
 }

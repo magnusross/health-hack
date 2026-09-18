@@ -13,6 +13,9 @@ enum DemoDataSeeder {
             return
         }
 
+        // Questions belong to PatientSeeder, which runs first in every build
+        // and owns the patient's real standing set.
+
         let existingEntries = try modelContext.fetch(
             FetchDescriptor<DiaryEntryRecord>()
         )

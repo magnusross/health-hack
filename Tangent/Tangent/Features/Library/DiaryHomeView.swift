@@ -37,11 +37,22 @@ struct DiaryHomeView: View {
             }
         }
         .background(Color.tangentWash)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                SettingsToolbarButton(action: openSettings)
-            }
+        .overlay(alignment: .topTrailing) {
+            SettingsToolbarButton(action: openSettings)
+                .padding(.trailing, 6)
         }
+        .overlay(alignment: .topLeading) {
+            Image("Logo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 25, height: 25)
+                .frame(width: 44, height: 44)
+                .padding(.leading, 6)
+                .accessibilityLabel("Tangent")
+        }
+        .toolbar(.hidden, for: .navigationBar)
+        .toolbarBackground(.hidden, for: .tabBar)
+        .toolbarBackgroundVisibility(.hidden, for: .tabBar)
         .task {
             await model.load()
         }
@@ -68,20 +79,24 @@ struct DiaryHomeView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 12)
-                .padding(.bottom, 40)
+                .padding(.bottom, 24)
                 .frame(maxWidth: .infinity)
                 .frame(minHeight: proxy.size.height, alignment: .center)
             }
+            .contentMargins(.top, 44, for: .scrollContent)
+            .contentMargins(.bottom, 96, for: .scrollContent)
             .defaultScrollAnchor(.bottom)
             .refreshable {
                 await model.load()
             }
         }
+        .ignoresSafeArea(edges: .bottom)
     }
 
     private var firstEntryAction: some View {
         todayRecordCard(on: calendar.startOfDay(for: Date()))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.top, 44)
             .padding(.bottom, 40)
     }
 

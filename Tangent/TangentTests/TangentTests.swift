@@ -228,6 +228,52 @@ struct TangentTests {
     }
 
     @Test @MainActor
+    func insightsGenerationUsesAClampedFourteenDayRange() async throws {
+        let container = try TangentModelContainer.make(inMemory: true)
+        let store = SwiftDataNoteStore(modelContext: container.mainContext)
+        let calendar = testCalendar
+        let today = try #require(
+            calendar.date(from: DateComponents(year: 2026, month: 9, day: 18))
+        )
+        let patient = PatientProfile(name: "Taylor")
+        try await store.savePatientProfile(patient)
+        try await store.saveDiaryEntry(
+            DiaryEntry(
+                patientID: patient.id,
+                day: today,
+                promptText: "Prompt",
+                summaryShort: "A steady day"
+            )
+        )
+        let model = InsightsViewModel(
+            noteStore: store,
+            healthModel: StubHealthLanguageModel(),
+            calendar: calendar,
+            now: today
+        )
+
+        let tooEarly = try #require(
+            calendar.date(byAdding: .day, value: -30, to: today)
+        )
+        model.setFromDate(tooEarly)
+        #expect(
+            calendar.dateComponents(
+                [.day],
+                from: model.fromDate,
+                to: model.toDate
+            ).day == 14
+        )
+
+        await model.generateInsight()
+        #expect(model.generatedInsight?.generatedFrom == model.fromDate)
+        #expect(model.generatedInsight?.generatedTo == model.toDate)
+        // The range the user picked reaches the prompt, and the filled prompt
+        // is what gets persisted.
+        #expect(model.generatedInsight?.promptText.contains("18 September") == true)
+        #expect(try await store.insights().count == 1)
+    }
+
+    @Test @MainActor
     func demoDataSeederCreatesEntriesOnce() async throws {
         let container = try TangentModelContainer.make(inMemory: true)
         let context = container.mainContext
@@ -240,7 +286,9 @@ struct TangentTests {
         let insights = try await store.insights()
         #expect(insights.count == 1)
         #expect(insights.first?.text.contains("sleep and energy") == true)
+        #expect(patient.age == 29)
         #expect(patient.email == "magnus.ross@example.com")
+        #expect(try await store.questions(patientID: patient.id).count == 8)
         let reminder = try #require(patient.dailyReminder)
         #expect(Calendar.autoupdatingCurrent.component(.hour, from: reminder) == 21)
 
@@ -373,5 +421,39 @@ struct TangentTests {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
         return calendar
+    }
+}
+
+/// Stands in for the model so the view model's own behaviour can be tested
+/// without a 2.5 GB download.
+private final class StubHealthLanguageModel: HealthLanguageModel {
+    func prepare() async {}
+
+    func generateShortSummary(
+        transcript: String,
+        profile: PatientProfile,
+        onPartial: (@Sendable (String) -> Void)?
+    ) async throws -> GeneratedText {
+        onPartial?("I had a")
+        return GeneratedText(text: "I had a steady day.", promptText: "short prompt")
+    }
+
+    func generateLongSummary(
+        transcript: String,
+        profile: PatientProfile
+    ) async throws -> GeneratedText {
+        GeneratedText(text: "User reports a steady day.", promptText: "long prompt")
+    }
+
+    func generateInsights(
+        from entries: [DiaryEntry],
+        period: String,
+        onPartial: (@Sendable (String) -> Void)?
+    ) async throws -> GeneratedText {
+        onPartial?("You seem")
+        GeneratedText(
+            text: "You seem steadier at weekends.",
+            promptText: "insights prompt for \(period)"
+        )
     }
 }

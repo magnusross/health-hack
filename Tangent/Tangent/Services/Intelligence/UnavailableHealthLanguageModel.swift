@@ -3,7 +3,7 @@ import Foundation
 /// Used where MLX cannot run — the Simulator, and previews. Fails cleanly so
 /// the rest of the app behaves exactly as it would on a device without the
 /// model, rather than crashing inside Metal.
-final class UnavailableSummaryGenerator: SummaryGenerator {
+final class UnavailableHealthLanguageModel: HealthLanguageModel {
     func prepare() async {}
 
     func generateShortSummary(
@@ -11,13 +11,21 @@ final class UnavailableSummaryGenerator: SummaryGenerator {
         profile: PatientProfile,
         onPartial: (@Sendable (String) -> Void)?
     ) async throws -> GeneratedText {
-        throw SummaryGenerationError.unsupportedDevice
+        throw HealthLanguageModelError.unsupportedDevice
     }
 
     func generateLongSummary(
         transcript: String,
         profile: PatientProfile
     ) async throws -> GeneratedText {
-        throw SummaryGenerationError.unsupportedDevice
+        throw HealthLanguageModelError.unsupportedDevice
+    }
+
+    func generateInsights(
+        from entries: [DiaryEntry],
+        period: String,
+        onPartial: (@Sendable (String) -> Void)?
+    ) async throws -> GeneratedText {
+        throw HealthLanguageModelError.unsupportedDevice
     }
 }
