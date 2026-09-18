@@ -20,16 +20,25 @@ final class SettingsViewModel: ObservableObject {
     @Published var exportDocument: SettingsExportDocument?
     @Published var showsExporter = false
 
+    @Published private(set) var selectedModel = SummaryModelID.default
+    @Published private(set) var modelStates: [SummaryModelID: ModelDownloadState] = [:]
+    /// Set when a model needs downloading, which puts the size in front of the
+    /// user before any bytes move.
+    @Published var pendingDownload: SummaryModelID?
+
     private let noteStore: any NoteStore
     private let reminderScheduler: any ReminderScheduler
+    private let modelCatalog: (any ModelCatalog)?
     private var profile: PatientProfile?
 
     init(
         noteStore: any NoteStore,
-        reminderScheduler: any ReminderScheduler
+        reminderScheduler: any ReminderScheduler,
+        modelCatalog: (any ModelCatalog)? = nil
     ) {
         self.noteStore = noteStore
         self.reminderScheduler = reminderScheduler
+        self.modelCatalog = modelCatalog
     }
 
     func load() async {
@@ -104,6 +113,100 @@ final class SettingsViewModel: ObservableObject {
         case .failure:
             message = "Your diary could not be exported."
         }
+    }
+
+    // MARK: - Models
+
+    func loadModels() async {
+        guard let modelCatalog else { return }
+        selectedModel = modelCatalog.selectedModel
+        for model in SummaryModelID.allCases {
+            modelStates[model] = await modelCatalog.state(of: model)
+        }
+        await followDownloads()
+    }
+
+    /// A download started here keeps reporting through its own callback, but a
+    /// download begun before this screen was reopened has no one listening, so
+    /// its progress is read back from the catalog until it finishes.
+    private func followDownloads() async {
+        guard let modelCatalog else { return }
+        while !Task.isCancelled,
+              modelStates.values.contains(where: { $0.isDownloading }) {
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled else { return }
+            for model in SummaryModelID.allCases
+            where modelStates[model]?.isDownloading == true {
+                modelStates[model] = await modelCatalog.state(of: model)
+            }
+        }
+    }
+
+    /// Choosing a model is also what downloads it, so the user never has to
+    /// find a separate action.
+    func chooseModel(_ model: SummaryModelID) {
+        guard let modelCatalog else { return }
+        modelCatalog.select(model)
+        selectedModel = model
+
+        let state = modelStates[model] ?? .notDownloaded
+        guard !state.isReady, !state.isDownloading else { return }
+        pendingDownload = model
+    }
+
+    func confirmPendingDownload() async {
+        guard let model = pendingDownload else { return }
+        pendingDownload = nil
+        await download(model)
+    }
+
+    func download(_ model: SummaryModelID) async {
+        guard let modelCatalog else { return }
+        modelStates[model] = .downloading(fraction: 0)
+        do {
+            try await modelCatalog.download(model) { [weak self] fraction in
+                self?.modelStates[model] = .downloading(fraction: fraction)
+            }
+            modelStates[model] = await modelCatalog.state(of: model)
+        } catch is CancellationError {
+            modelStates[model] = await modelCatalog.state(of: model)
+        } catch {
+            modelStates[model] = .failed(message: error.localizedDescription)
+        }
+    }
+
+    func cancelDownload(_ model: SummaryModelID) async {
+        guard let modelCatalog else { return }
+        modelCatalog.cancelDownload(model)
+        modelStates[model] = await modelCatalog.state(of: model)
+    }
+
+    func deleteModel(_ model: SummaryModelID) async {
+        guard let modelCatalog else { return }
+        do {
+            try await modelCatalog.delete(model)
+            message = "\(model.displayName) removed."
+        } catch {
+            message = "\(model.displayName) could not be removed."
+        }
+        modelStates[model] = await modelCatalog.state(of: model)
+    }
+
+    func stateDescription(for model: SummaryModelID) -> String {
+        switch modelStates[model] ?? .notDownloaded {
+        case .notDownloaded:
+            "Not downloaded · \(Self.size(model.approximateDownloadBytes))"
+        case .downloading(let fraction):
+            "Downloading · \(Int(fraction * 100))%"
+        case .ready(let bytes):
+            "On this device · \(Self.size(bytes))"
+        case .failed(let message):
+            message
+        }
+    }
+
+    private static func size(_ bytes: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }
 
     var formattedReminderTime: String {
