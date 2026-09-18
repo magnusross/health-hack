@@ -1,0 +1,229 @@
+## Task: Initialize Tangent architecture and persistence layer
+
+Read `rules.txt` first and treat it as the source of truth for the application requirements and database schema.
+
+### Objective
+
+Create the foundational architecture, domain models, and database/persistence layer for Tangent as a SwiftUI app inside Tangent folder so that subsequent agents can implement the five user workflows independently.
+
+Do **not** implement workflow-specific functionality beyond what is required to preserve the existing UI and make the architecture compile.
+
+### 1. Inspect the existing project
+
+Before making changes:
+
+* Review the existing SwiftUI project structure.
+* Identify the current Record/Home and Library UI.
+* Identify any existing persistence, audio, or speech code.
+* Preserve all existing UI behaviour.
+* Do not redesign the interface.
+
+### 2. Create the modular project structure
+
+Organize the project into:
+
+```text
+App/
+DesignSystem/
+
+Features/
+    Record/
+    Library/
+
+Domain/
+
+Data/
+
+Services/
+    Audio/
+    Speech/
+```
+
+Move existing UI into the appropriate `Features/Record` and `Features/Library` folders without changing behaviour.
+
+### 3. Design System
+
+Create shared design-system definitions for the Tangent colours specified in `rules.txt`.
+
+UI code should reference semantic/shared colour definitions rather than redefining RGB values locally.
+
+### 4. Domain layer
+
+Create clean Swift domain models representing:
+
+* PatientProfile
+* Prompt
+* Question
+* DiaryEntry
+* Insight
+
+Keep domain models independent from the persistence framework where practical.
+
+Also create the required protocols:
+
+```swift
+protocol NoteStore
+protocol AudioRecorder
+protocol Transcriber
+```
+
+`NoteStore` should expose the persistence operations that later features will need without exposing implementation details of the database.
+
+At minimum, support CRUD-style operations for:
+
+* patient profile
+* prompts
+* questions
+* diary entries
+* insights
+
+Use async APIs where appropriate.
+
+### 5. Persistence / Database layer
+
+Implement the database schema defined in `rules.txt`.
+
+For this iOS application, use **SwiftData for local persistence unless the repository already contains an established persistence technology that should be retained**.
+
+Create persistence models for:
+
+#### PATIENT_PROFILE
+
+* id
+* name
+* age
+* weight
+* gender
+* health_interests
+* health_concerns
+* email
+* daily_reminder
+
+#### PROMPT
+
+* id
+* text
+
+#### QUESTIONS
+
+* id
+* patient_id
+* prompt_text
+* text
+
+#### DIARY
+
+* id
+* patient_id
+* day
+* questions
+* prompt_text
+* summary_short
+* summary_long
+* transcript_path
+
+#### INSIGHTS
+
+* id
+* day
+* generated_from
+* generated_to
+* prompt_text
+* text
+
+Important:
+
+* Preserve `prompt_text` as the **fully populated prompt used at generation time**, rather than only referencing the original prompt template.
+* Preserve diary `questions` as snapshots of the actual questions shown to the patient so historical diary entries do not change if question templates later change.
+* Use UUIDs for IDs unless an existing project convention requires otherwise.
+* Use `Date` for date fields.
+* Model arrays/structured values cleanly rather than storing ad-hoc delimiter-separated strings.
+* Keep persistence-specific models/conversion logic inside `Data/`.
+
+### 6. Repository implementation
+
+Create a concrete implementation of `NoteStore` backed by the persistence layer.
+
+Features should ultimately depend on `NoteStore`, not directly on SwiftData.
+
+Structure this so a future remote backend could replace or synchronize with the local implementation without rewriting feature code.
+
+### 7. Service foundations
+
+Create compilation-safe interfaces/placeholders for:
+
+```text
+Services/Audio/
+Services/Speech/
+```
+
+Do not implement the full recording/transcription workflows yet.
+
+The purpose of this task is simply to establish clean boundaries for later implementations of `AudioRecorder` and `Transcriber`.
+
+### 8. App dependency setup
+
+Set up dependency creation/injection in the `App/` layer so later features can access:
+
+* NoteStore
+* AudioRecorder
+* Transcriber
+
+Avoid global singletons where possible.
+
+### 9. Constraints
+
+Do NOT:
+
+* implement MedGemma integration
+* implement prompt generation
+* implement personalized question generation
+* implement audio recording behaviour
+* implement transcription
+* implement notifications
+* implement streaks
+* redesign screens
+* build the five workflows yet
+
+This task is infrastructure only.
+
+### 10. Verification
+
+Before finishing:
+
+* Ensure the app builds successfully.
+* Ensure existing UI still behaves as before.
+* Ensure the SwiftData container initializes successfully.
+* Ensure basic create/read/update/delete persistence operations work.
+* Check that the folder/module boundaries do not introduce circular dependencies.
+
+### 11. Documentation
+
+Add a concise architecture document, for example:
+
+```text
+ARCHITECTURE.md
+```
+
+Include:
+
+* directory responsibilities
+* domain → data dependency direction
+* persistence approach
+* how `NoteStore` is used
+* where future Audio/Speech implementations belong
+* how future workflow agents should add features without bypassing the architecture
+
+Keep this short and practical.
+
+### 12. Git
+
+Keep this work isolated from unrelated changes.
+
+Commit all completed work with an appropriate message, for example:
+
+```text
+feat: initialize Tangent architecture and persistence layer
+```
+
+Do not include unrelated modifications in the commit.

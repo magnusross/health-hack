@@ -1,3 +1,92 @@
 Make sure to create this app using modular folders: App, DesignSystem, Features/Record, Features/Library, Domain, Data, Services/Audio, Services/Speech. Move existing UI into Features/Record and Features/Library without changing behaviour. Add Domain protocols NoteStore, AudioRecorder, Transcriber. 
 
+Housekeeping: 
+Every change should be isolated and git committed with appropriate messaging 
+https://github.com/magnusross/health-hack.git 
+
+This app is called Tangent and its purpose is to create a health voice diary that users will use to track their general health where ALL data and processing stays on the app. 
+They will record 1 - 5 minute audio recordings of how they have been feeling and we will track their health using medgemma with summaries. 
+
+Color Scheme:
+Purple = Color(red: 121/255, green: 127/255, blue: 242/255)
+Lilac  = Color(red: 153/255, green: 175/255, blue: 242/255)
+Wash   = Color(red: 242/255, green: 242/255, blue: 247/255)
+Ink    = Color(red: 13/255,  green: 13/255,  blue: 13/255)
+Gold   = Color(red: 252/255, green: 208/255, blue: 116/255)
+Sky    = Color(red: 5/255,   green: 151/255, blue: 242/255)
+
 Database / Backend 
+databases:
+
+  PATIENT_PROFILE:
+    purpose: Stores patient profile and health context
+    fields:
+      - id
+      - name
+      - age
+      - weight
+      - gender
+      - health_interests
+      - health_concerns
+      - email
+      - daily_reminder
+
+  PROMPT:
+    purpose: Stores reusable prompt templates
+    fields:
+      - id
+      - text
+
+  QUESTIONS:
+    purpose: Stores personalized questions generated for each patient
+    fields:
+      - id
+      - patient_id
+      - prompt_text
+      - text
+    notes:
+      - prompt_text contains the prompt with its fields filled in
+
+  DIARY:
+    purpose: Stores each patient's daily diary entry and generated summaries
+    fields:
+      - id
+      - patient_id
+      - day
+      - questions
+      - prompt_text
+      - summary_short
+      - summary_long
+      - transcript_path
+    field_types:
+      day: date
+    notes:
+      - questions contains copies of the questions shown to the patient, including their text
+      - prompt_text contains the prompt used for the diary generation
+
+  INSIGHTS:
+    purpose: Stores insights generated across a range of diary entries
+    fields:
+      - id
+      - day
+      - generated_from
+      - generated_to
+      - prompt_text
+      - text
+    field_types:
+      day: date
+      generated_from: date
+      generated_to: date
+    notes:
+      - prompt_text contains the prompt with its fields filled in
+
+Five user workflows: 
+1. Diary of Tangents (home page)
+2. Record Tangent 
+3. Daily tangent details 
+4. Settings
+5. Insight/Overviews 
+
+Future goals:
+- notifications on a daily reminder "Got a few minutes to talk?"
+- daily streaks 
