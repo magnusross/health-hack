@@ -251,6 +251,49 @@ struct TangentTests {
     }
 
     @Test @MainActor
+    func insightsGenerationUsesAClampedFourteenDayRange() async throws {
+        let container = try TangentModelContainer.make(inMemory: true)
+        let store = SwiftDataNoteStore(modelContext: container.mainContext)
+        let calendar = testCalendar
+        let today = try #require(
+            calendar.date(from: DateComponents(year: 2026, month: 9, day: 18))
+        )
+        let patient = PatientProfile(name: "Taylor")
+        try await store.savePatientProfile(patient)
+        try await store.saveDiaryEntry(
+            DiaryEntry(
+                patientID: patient.id,
+                day: today,
+                promptText: "Prompt",
+                summaryShort: "A steady day"
+            )
+        )
+        let model = InsightsViewModel(
+            noteStore: store,
+            healthModel: MockHealthLanguageModel(responseDelay: .zero),
+            calendar: calendar,
+            now: today
+        )
+
+        let tooEarly = try #require(
+            calendar.date(byAdding: .day, value: -30, to: today)
+        )
+        model.setFromDate(tooEarly)
+        #expect(
+            calendar.dateComponents(
+                [.day],
+                from: model.fromDate,
+                to: model.toDate
+            ).day == 14
+        )
+
+        await model.generateInsight()
+        #expect(model.insights.count == 1)
+        #expect(model.insights.first?.generatedFrom == model.fromDate)
+        #expect(model.insights.first?.generatedTo == model.toDate)
+    }
+
+    @Test @MainActor
     func demoDataSeederCreatesEntriesOnce() async throws {
         let container = try TangentModelContainer.make(inMemory: true)
         let context = container.mainContext

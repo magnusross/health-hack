@@ -37,16 +37,13 @@ struct DiaryHomeView: View {
             }
         }
         .background(Color.tangentWash)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            Color.tangentWash
-                .frame(height: 32)
-                .allowsHitTesting(false)
-        }
         .overlay(alignment: .topTrailing) {
             SettingsToolbarButton(action: openSettings)
                 .padding(.trailing, 6)
         }
         .toolbar(.hidden, for: .navigationBar)
+        .toolbarBackground(.hidden, for: .tabBar)
+        .toolbarBackgroundVisibility(.hidden, for: .tabBar)
         .task {
             await model.load()
         }
@@ -73,16 +70,18 @@ struct DiaryHomeView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 12)
-                .padding(.bottom, 40)
+                .padding(.bottom, 24)
                 .frame(maxWidth: .infinity)
                 .frame(minHeight: proxy.size.height, alignment: .center)
             }
             .contentMargins(.top, 44, for: .scrollContent)
+            .contentMargins(.bottom, 96, for: .scrollContent)
             .defaultScrollAnchor(.bottom)
             .refreshable {
                 await model.load()
             }
         }
+        .ignoresSafeArea(edges: .bottom)
     }
 
     private var firstEntryAction: some View {

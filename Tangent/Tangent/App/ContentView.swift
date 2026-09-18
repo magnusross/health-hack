@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct ContentView: View {
     let dependencies: AppDependencies
@@ -7,6 +8,11 @@ struct ContentView: View {
     @State private var diaryPath: [DiaryRoute] = []
     @State private var recordPath: [RecordRoute] = []
     @State private var coversRecordTransition = false
+
+    init(dependencies: AppDependencies) {
+        self.dependencies = dependencies
+        Self.makeTabBarTransparent()
+    }
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -44,6 +50,8 @@ struct ContentView: View {
                     }
                 }
             }
+            .toolbarBackground(.hidden, for: .tabBar)
+            .toolbarBackgroundVisibility(.hidden, for: .tabBar)
             .tabItem {
                 Image(systemName: "book.closed")
                     .accessibilityLabel("Diary")
@@ -68,6 +76,8 @@ struct ContentView: View {
                     }
                 }
             }
+            .toolbarBackground(.hidden, for: .tabBar)
+            .toolbarBackgroundVisibility(.hidden, for: .tabBar)
             .tabItem {
                 Image(systemName: "mic")
                     .accessibilityLabel("Record")
@@ -75,8 +85,13 @@ struct ContentView: View {
             .tag(PrimaryTab.record)
 
             NavigationStack {
-                InsightsView(noteStore: dependencies.noteStore)
+                InsightsView(
+                    noteStore: dependencies.noteStore,
+                    healthModel: dependencies.healthModel
+                )
             }
+            .toolbarBackground(.hidden, for: .tabBar)
+            .toolbarBackgroundVisibility(.hidden, for: .tabBar)
             .tabItem {
                 Image(systemName: "lightbulb")
                     .accessibilityLabel("Insights")
@@ -84,6 +99,9 @@ struct ContentView: View {
             .tag(PrimaryTab.insights)
         }
         .tint(Color.tangentPurple)
+        .toolbarBackground(.hidden, for: .tabBar)
+        .toolbarBackgroundVisibility(.hidden, for: .tabBar)
+        .onAppear(perform: Self.makeTabBarTransparent)
         .overlay {
             Color.tangentWash
                 .ignoresSafeArea()
@@ -123,6 +141,16 @@ struct ContentView: View {
         diaryPath = []
         recordPath = []
         selectedTab = .record
+    }
+
+    private static func makeTabBarTransparent() {
+        let appearance = UITabBarAppearance()
+        appearance.configureWithTransparentBackground()
+        appearance.backgroundColor = .clear
+        appearance.shadowColor = .clear
+        UITabBar.appearance().standardAppearance = appearance
+        UITabBar.appearance().scrollEdgeAppearance = appearance
+        UITabBar.appearance().isTranslucent = true
     }
 }
 

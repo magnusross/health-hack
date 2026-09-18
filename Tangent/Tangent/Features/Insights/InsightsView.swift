@@ -3,9 +3,15 @@ import SwiftUI
 struct InsightsView: View {
     @StateObject private var model: InsightsViewModel
 
-    init(noteStore: any NoteStore) {
+    init(
+        noteStore: any NoteStore,
+        healthModel: any HealthLanguageModel
+    ) {
         _model = StateObject(
-            wrappedValue: InsightsViewModel(noteStore: noteStore)
+            wrappedValue: InsightsViewModel(
+                noteStore: noteStore,
+                healthModel: healthModel
+            )
         )
     }
 
@@ -20,16 +26,8 @@ struct InsightsView: View {
                     systemImage: "exclamationmark.circle",
                     description: Text(loadError)
                 )
-            } else if model.insights.isEmpty {
-                ContentUnavailableView(
-                    "No insights yet",
-                    systemImage: "lightbulb",
-                    description: Text(
-                        "Insights will appear as your diary grows."
-                    )
-                )
             } else {
-                insightsList
+                insightsContent
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -42,10 +40,12 @@ struct InsightsView: View {
         }
     }
 
-    private var insightsList: some View {
+    private var insightsContent: some View {
         GeometryReader { proxy in
             ScrollView {
-                LazyVStack(spacing: 16) {
+                VStack(spacing: 24) {
+                    generator
+
                     ForEach(model.insights) { insight in
                         insightBlock(insight)
                     }
@@ -61,6 +61,66 @@ struct InsightsView: View {
             .refreshable {
                 await model.load()
             }
+        }
+    }
+
+    private var generator: some View {
+        VStack(spacing: 18) {
+            Text("Generate insight")
+                .font(.system(.title2, weight: .semibold))
+
+            DatePicker(
+                "From",
+                selection: Binding(
+                    get: { model.fromDate },
+                    set: model.setFromDate
+                ),
+                in: model.earliestFromDate...model.toDate,
+                displayedComponents: .date
+            )
+
+            DatePicker(
+                "To",
+                selection: Binding(
+                    get: { model.toDate },
+                    set: model.setToDate
+                ),
+                in: ...model.latestToDate,
+                displayedComponents: .date
+            )
+
+            Button {
+                Task { await model.generateInsight() }
+            } label: {
+                Group {
+                    if model.isGenerating {
+                        ProgressView()
+                            .tint(.white)
+                    } else {
+                        Text("Generate")
+                    }
+                }
+                .font(.system(.body, weight: .semibold))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 13)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Color.tangentPurple)
+            .disabled(model.isGenerating)
+
+            if let generationError = model.generationError {
+                Text(generationError)
+                    .font(.system(.footnote))
+                    .foregroundStyle(.red)
+            }
+        }
+        .padding(20)
+        .frame(maxWidth: 420)
+        .background(Color.tangentPaper.opacity(0.82))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.tangentInk.opacity(0.06), lineWidth: 1)
         }
     }
 
@@ -101,7 +161,8 @@ struct InsightsView: View {
     let container = try! TangentModelContainer.make(inMemory: true)
     NavigationStack {
         InsightsView(
-            noteStore: SwiftDataNoteStore(modelContext: container.mainContext)
+            noteStore: SwiftDataNoteStore(modelContext: container.mainContext),
+            healthModel: MockHealthLanguageModel(responseDelay: .zero)
         )
     }
 }
