@@ -4,4 +4,6 @@ struct AppDependencies {
     let transcriber: any Transcriber
     let healthModel: any HealthLanguageModel
     let reminderScheduler: any ReminderScheduler
+    let summaryGenerator: any SummaryGenerator
+    let modelCatalog: any ModelCatalog
 }

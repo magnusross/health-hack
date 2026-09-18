@@ -4,27 +4,30 @@ struct DailyTangentDetailsView: View {
     @StateObject private var model: DailyTangentDetailsViewModel
     private let calendar: Calendar
     private let redoToday: (() -> Void)?
+    private let openSettings: (() -> Void)?
 
     init(
         noteStore: any NoteStore,
         transcriber: (any Transcriber)? = nil,
-        healthModel: (any HealthLanguageModel)? = nil,
+        summaryGenerator: (any SummaryGenerator)? = nil,
         diaryID: UUID,
         streamsTranscript: Bool = false,
         calendar: Calendar = .autoupdatingCurrent,
-        redoToday: (() -> Void)? = nil
+        redoToday: (() -> Void)? = nil,
+        openSettings: (() -> Void)? = nil
     ) {
         _model = StateObject(
             wrappedValue: DailyTangentDetailsViewModel(
                 noteStore: noteStore,
                 transcriber: transcriber,
-                healthModel: healthModel,
+                summaryGenerator: summaryGenerator,
                 diaryID: diaryID,
                 streamsTranscript: streamsTranscript
             )
         )
         self.calendar = calendar
         self.redoToday = redoToday
+        self.openSettings = openSettings
     }
 
     var body: some View {
@@ -43,10 +46,7 @@ struct DailyTangentDetailsView: View {
                         .font(.system(.title2, design: .serif, weight: .medium))
                         .foregroundStyle(Color.tangentInk)
 
-                        detailSection(
-                            title: "Summary",
-                            text: summaryText(for: entry)
-                        )
+                        summarySection(for: entry)
 
                         Divider()
                             .overlay(Color.tangentInk.opacity(0.1))
@@ -86,6 +86,7 @@ struct DailyTangentDetailsView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .animation(.easeOut(duration: 0.2), value: model.summaryDisplay)
         .background(Color.tangentWash)
         .navigationTitle("Daily Tangent")
         .navigationBarTitleDisplayMode(.inline)
@@ -108,11 +109,71 @@ struct DailyTangentDetailsView: View {
         return "No transcript is available for this entry."
     }
 
-    private func summaryText(for entry: DiaryEntry) -> String {
-        if !entry.summaryShort.isEmpty {
-            return entry.summaryShort
+    private func summarySection(for entry: DiaryEntry) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Text("Summary")
+                .font(.system(.headline, design: .serif))
+                .foregroundStyle(Color.tangentInk)
+
+            summaryContent
         }
-        return entry.summaryLong
+    }
+
+    @ViewBuilder
+    private var summaryContent: some View {
+        switch model.summaryDisplay {
+        case .nothingYet:
+            HStack(spacing: 8) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Generating summary…")
+                    .font(.system(.body, design: .serif))
+                    .foregroundStyle(Color.tangentInk.opacity(0.6))
+            }
+
+        // Words appearing one by one say "in progress" better than a label
+        // would, so nothing else is shown while they arrive.
+        case .writing(let text), .written(let text):
+            summaryText(text)
+
+        case .failed(_, let needsModel):
+            VStack(alignment: .leading, spacing: 12) {
+                unavailableText
+
+                if needsModel, let openSettings {
+                    Button("Choose a model", action: openSettings)
+                        .font(.system(.subheadline, design: .serif, weight: .medium))
+                        .foregroundStyle(Color.tangentPurple)
+                } else {
+                    Button("Try again") {
+                        Task { await model.regenerate() }
+                    }
+                    .font(.system(.subheadline, design: .serif, weight: .medium))
+                    .foregroundStyle(Color.tangentPurple)
+                }
+            }
+
+        case .never:
+            unavailableText
+        }
+    }
+
+    private var unavailableText: some View {
+        Text("No summary available.")
+            .font(.system(.body, design: .serif))
+            .foregroundStyle(Color.tangentInk.opacity(0.6))
+    }
+
+    @ViewBuilder
+    private func summaryText(_ text: String) -> some View {
+        if !text.isEmpty {
+            Text(text)
+                .font(.system(.body, design: .serif))
+                .foregroundStyle(Color.tangentInk.opacity(0.9))
+                .lineSpacing(6)
+                .textSelection(.enabled)
+                .id("summary")
+        }
     }
 
     private func detailSection(title: String, text: String) -> some View {

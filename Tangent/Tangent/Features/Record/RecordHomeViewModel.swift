@@ -17,6 +17,7 @@ final class RecordHomeViewModel: ObservableObject {
     private let audioRecorder: any AudioRecorder
     private let transcriber: any Transcriber
     private let noteStore: any NoteStore
+    private let summaryGenerator: (any SummaryGenerator)?
     private var elapsedTask: Task<Void, Never>?
     private var questionTask: Task<Void, Never>?
     private var suggestionOfferTask: Task<Void, Never>?
@@ -29,6 +30,7 @@ final class RecordHomeViewModel: ObservableObject {
         audioRecorder: any AudioRecorder,
         transcriber: any Transcriber,
         noteStore: any NoteStore,
+        summaryGenerator: (any SummaryGenerator)? = nil,
         initialQuestionDelay: Duration = .seconds(3),
         questionInterval: Duration = .seconds(10),
         questionTransitionDelay: Duration = .milliseconds(2200)
@@ -36,6 +38,7 @@ final class RecordHomeViewModel: ObservableObject {
         self.audioRecorder = audioRecorder
         self.transcriber = transcriber
         self.noteStore = noteStore
+        self.summaryGenerator = summaryGenerator
         self.initialQuestionDelay = initialQuestionDelay
         self.questionInterval = questionInterval
         self.questionTransitionDelay = questionTransitionDelay
@@ -69,6 +72,14 @@ final class RecordHomeViewModel: ObservableObject {
             phase = .recording
             startElapsedTimer()
             scheduleQuestionSuggestionOffer()
+
+            // Warm the model while the user talks. By the time they stop and
+            // the transcript is ready, the weights are already in memory.
+            if let summaryGenerator {
+                Task.detached(priority: .utility) {
+                    await summaryGenerator.prepare()
+                }
+            }
         } catch {
             phase = .failed(message: error.localizedDescription)
         }
@@ -88,7 +99,6 @@ final class RecordHomeViewModel: ObservableObject {
         do {
             let recordingURL = try await audioRecorder.stopRecording()
             return try await saveTodayEntry(
-                transcript: "",
                 transcriptPath: recordingURL.path,
                 questions: promptedQuestions
             )
@@ -111,7 +121,6 @@ final class RecordHomeViewModel: ObservableObject {
     }
 
     private func saveTodayEntry(
-        transcript: String,
         transcriptPath: String,
         questions: [DiaryQuestion]
     ) async throws -> UUID {
@@ -119,16 +128,11 @@ final class RecordHomeViewModel: ObservableObject {
             throw RecordPersistenceError.missingProfile
         }
 
-        let summary = transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? "…"
-            : Self.summarize(transcript)
         let entry = DiaryEntry(
             patientID: patient.id,
             day: Date(),
             questions: questions,
             promptText: "Daily Tangent recorded and transcribed on device",
-            summaryShort: summary,
-            summaryLong: transcript,
             transcriptPath: transcriptPath
         )
         try await noteStore.saveDiaryEntry(entry)
@@ -147,17 +151,6 @@ final class RecordHomeViewModel: ObservableObject {
         let url = directory.appending(path: "tangent-\(UUID().uuidString).txt")
         try transcript.write(to: url, atomically: true, encoding: .utf8)
         return url.path
-    }
-
-    nonisolated static func summarize(_ transcript: String) -> String {
-        let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return "Today’s Tangent" }
-
-        if let end = trimmed.firstIndex(where: { $0 == "." || $0 == "?" || $0 == "!" }) {
-            return String(trimmed[...end]).trimmingCharacters(in: .whitespaces)
-        }
-        if trimmed.count <= 120 { return trimmed }
-        return String(trimmed.prefix(117)).trimmingCharacters(in: .whitespaces) + "…"
     }
 
     private func startElapsedTimer() {

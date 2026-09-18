@@ -5,66 +5,26 @@ struct SettingsView: View {
 
     init(
         noteStore: any NoteStore,
-        reminderScheduler: any ReminderScheduler
+        reminderScheduler: any ReminderScheduler,
+        modelCatalog: (any ModelCatalog)? = nil
     ) {
         _model = StateObject(
             wrappedValue: SettingsViewModel(
                 noteStore: noteStore,
-                reminderScheduler: reminderScheduler
+                reminderScheduler: reminderScheduler,
+                modelCatalog: modelCatalog
             )
         )
     }
 
     var body: some View {
         Form {
-            Section("Profile") {
-                LabeledContent("Name", value: model.name)
-                LabeledContent("Age", value: model.age)
-                LabeledContent("Weight", value: model.weight)
-                LabeledContent("Gender", value: model.gender)
-                LabeledContent("Email", value: model.email)
-            }
-
-            Section("Health context") {
-                LabeledContent("Health interests", value: model.healthInterests)
-                LabeledContent("Health concerns", value: model.healthConcerns)
-            }
-
-            Section("Daily reminder") {
-                Toggle(
-                    "Reminder",
-                    isOn: Binding(
-                        get: { model.reminderEnabled },
-                        set: { enabled in
-                            Task { await model.setReminderEnabled(enabled) }
-                        }
-                    )
-                )
-                .disabled(model.isUpdatingReminder || model.isLoading)
-
-                DatePicker(
-                    "Time",
-                    selection: Binding(
-                        get: { model.dailyReminder },
-                        set: { time in
-                            Task { await model.setReminderTime(time) }
-                        }
-                    ),
-                    displayedComponents: .hourAndMinute
-                )
-                .disabled(
-                    !model.reminderEnabled
-                        || model.isUpdatingReminder
-                        || model.isLoading
-                )
-            }
-
-            if let message = model.message {
-                Section {
-                    Text(message)
-                        .foregroundStyle(Color.tangentInk.opacity(0.65))
-                }
-            }
+            profileSection
+            healthContextSection
+            reminderSection
+            modelSection
+            privacySection
+            messageSection
         }
         .font(.system(.body))
         .foregroundStyle(Color.tangentInk)
@@ -106,16 +66,196 @@ struct SettingsView: View {
         }
         .task {
             await model.load()
+            await model.loadModels()
         }
     }
-}
 
-#Preview {
-    let container = try! TangentModelContainer.make(inMemory: true)
-    NavigationStack {
-        SettingsView(
-            noteStore: SwiftDataNoteStore(modelContext: container.mainContext),
-            reminderScheduler: UnavailableReminderScheduler()
+    private var profileSection: some View {
+        Section("Profile") {
+            LabeledContent("Name", value: model.name)
+            LabeledContent("Age", value: model.age)
+            LabeledContent("Weight", value: model.weight)
+            LabeledContent("Gender", value: model.gender)
+            LabeledContent("Email", value: model.email)
+        }
+    }
+
+    private var healthContextSection: some View {
+        Section("Health context") {
+            LabeledContent("Health interests", value: model.healthInterests)
+            LabeledContent("Health concerns", value: model.healthConcerns)
+        }
+    }
+
+    private var reminderSection: some View {
+        Section("Daily reminder") {
+            Toggle("Reminder", isOn: reminderBinding)
+                .disabled(model.isUpdatingReminder || model.isLoading)
+            DatePicker(
+                "Time",
+                selection: Binding(
+                    get: { model.dailyReminder },
+                    set: { time in
+                        Task { await model.setReminderTime(time) }
+                    }
+                ),
+                displayedComponents: .hourAndMinute
+            )
+            .disabled(
+                !model.reminderEnabled
+                    || model.isUpdatingReminder
+                    || model.isLoading
+            )
+        }
+    }
+
+    private var reminderBinding: Binding<Bool> {
+        Binding(
+            get: { model.reminderEnabled },
+            set: { enabled in
+                Task { await model.setReminderEnabled(enabled) }
+            }
         )
+    }
+
+    private var modelSection: some View {
+        Section {
+            ForEach(SummaryModelID.allCases) { summaryModel in
+                modelRow(summaryModel)
+            }
+        } header: {
+            Text("Model")
+        }
+    }
+
+    private var privacySection: some View {
+        Section {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "lock.shield.fill")
+                    .font(.title3)
+                    .foregroundStyle(Color.tangentPurple)
+                Text("All computation is on-device. Your data is private to you.")
+                    .font(.footnote)
+                    .foregroundStyle(Color.tangentInk.opacity(0.75))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.vertical, 6)
+            .listRowBackground(Color.white)
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    @ViewBuilder
+    private var messageSection: some View {
+        if let message = model.message {
+            Section {
+                Text(message)
+                    .foregroundStyle(Color.tangentInk.opacity(0.65))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func modelRow(_ summaryModel: SummaryModelID) -> some View {
+        let state = model.modelStates[summaryModel] ?? .notDownloaded
+        let isSelected = model.selectedModel == summaryModel
+
+        VStack(alignment: .leading, spacing: 10) {
+            Button {
+                model.chooseModel(summaryModel)
+            } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(summaryModel.displayName)
+                        .font(.system(.body, weight: isSelected ? .semibold : .regular))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    if isSelected {
+                        Image(systemName: "checkmark")
+                            .foregroundStyle(Color.tangentPurple)
+                            .accessibilityLabel("Selected")
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            modelStatus(summaryModel, state: state)
+        }
+        .padding(.vertical, 4)
+    }
+
+    /// Everything about the weights — where they are and what to do about it —
+    /// stays inside the model's own card. No sheet, no dialog.
+    @ViewBuilder
+    private func modelStatus(
+        _ summaryModel: SummaryModelID,
+        state: ModelDownloadState
+    ) -> some View {
+        switch state {
+        case .downloading(let progress):
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text(model.stateDescription(for: summaryModel))
+                        .font(.footnote)
+                        .foregroundStyle(Color.tangentInk.opacity(0.75))
+                }
+                // The bar only appears once the total is known; before that the
+                // spinner carries the "something is happening" job on its own.
+                if progress.totalBytes > 0 {
+                    ProgressView(value: progress.fraction)
+                        .tint(Color.tangentPurple)
+                }
+                modelButton("Cancel", role: nil) {
+                    Task { await model.cancelDownload(summaryModel) }
+                }
+            }
+
+        case .ready:
+            VStack(alignment: .leading, spacing: 7) {
+                statusLine(summaryModel)
+                modelButton("Remove", role: .destructive) {
+                    Task { await model.deleteModel(summaryModel) }
+                }
+            }
+
+        case .notDownloaded, .failed:
+            VStack(alignment: .leading, spacing: 7) {
+                statusLine(summaryModel)
+                modelButton(downloadLabel(for: summaryModel), role: nil) {
+                    Task { await model.download(summaryModel) }
+                }
+            }
+        }
+    }
+
+    private func statusLine(_ summaryModel: SummaryModelID) -> some View {
+        Text(model.stateDescription(for: summaryModel))
+            .font(.footnote)
+            .foregroundStyle(Color.tangentInk.opacity(0.6))
+    }
+
+    /// The size sits on the button, so the user reads what the tap will cost
+    /// before making it.
+    private func downloadLabel(for summaryModel: SummaryModelID) -> String {
+        let size = ByteCountFormatter.string(
+            fromByteCount: summaryModel.approximateDownloadBytes,
+            countStyle: .file
+        )
+        return "Download · \(size)"
+    }
+
+    private func modelButton(
+        _ title: String,
+        role: ButtonRole?,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(title, role: role, action: action)
+            .font(.system(.subheadline, weight: .medium))
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.capsule)
+            .controlSize(.small)
+            .tint(role == .destructive ? .red : Color.tangentPurple)
     }
 }

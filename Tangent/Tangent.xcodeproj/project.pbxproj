@@ -6,6 +6,15 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		5CE7E2B1305D2BBB007DC982 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = 5CE7E2A1305D2BBB007DC982 /* MLXLLM */; };
+		5CE7E2B2305D2BBB007DC982 /* MLXVLM in Frameworks */ = {isa = PBXBuildFile; productRef = 5CE7E2A2305D2BBB007DC982 /* MLXVLM */; };
+		5CE7E2B3305D2BBB007DC982 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = 5CE7E2A3305D2BBB007DC982 /* MLXLMCommon */; };
+		5CE7E2B4305D2BBB007DC982 /* MLXHuggingFace in Frameworks */ = {isa = PBXBuildFile; productRef = 5CE7E2A4305D2BBB007DC982 /* MLXHuggingFace */; };
+		5CE7E2D1305D2BBB007DC982 /* HuggingFace in Frameworks */ = {isa = PBXBuildFile; productRef = 5CE7E2C1305D2BBB007DC982 /* HuggingFace */; };
+		5CE7E2F1305D2BBB007DC982 /* Tokenizers in Frameworks */ = {isa = PBXBuildFile; productRef = 5CE7E2E1305D2BBB007DC982 /* Tokenizers */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		5CE7E1B5305D2BBD007DC982 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +61,12 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5CE7E2B1305D2BBB007DC982 /* MLXLLM in Frameworks */,
+				5CE7E2B2305D2BBB007DC982 /* MLXVLM in Frameworks */,
+				5CE7E2B3305D2BBB007DC982 /* MLXLMCommon in Frameworks */,
+				5CE7E2B4305D2BBB007DC982 /* MLXHuggingFace in Frameworks */,
+				5CE7E2D1305D2BBB007DC982 /* HuggingFace in Frameworks */,
+				5CE7E2F1305D2BBB007DC982 /* Tokenizers in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -112,6 +127,12 @@
 			);
 			name = Tangent;
 			packageProductDependencies = (
+				5CE7E2A1305D2BBB007DC982 /* MLXLLM */,
+				5CE7E2A2305D2BBB007DC982 /* MLXVLM */,
+				5CE7E2A3305D2BBB007DC982 /* MLXLMCommon */,
+				5CE7E2A4305D2BBB007DC982 /* MLXHuggingFace */,
+				5CE7E2C1305D2BBB007DC982 /* HuggingFace */,
+				5CE7E2E1305D2BBB007DC982 /* Tokenizers */,
 			);
 			productName = Tangent;
 			productReference = 5CE7E1A4305D2BBB007DC982 /* Tangent.app */;
@@ -195,6 +216,11 @@
 			);
 			mainGroup = 5CE7E19B305D2BBB007DC982;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				5CE7E2A0305D2BBB007DC982 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */,
+				5CE7E2C0305D2BBB007DC982 /* XCRemoteSwiftPackageReference "swift-huggingface" */,
+				5CE7E2E0305D2BBB007DC982 /* XCRemoteSwiftPackageReference "swift-transformers" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 5CE7E1A5305D2BBB007DC982 /* Products */;
 			projectDirPath = "";
@@ -393,9 +419,11 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Tangent.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Tangent/Preview Content\"";
+				DEVELOPMENT_TEAM = PU75NNGUW6;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Tangent uses the microphone to record your voice diary entries. Recordings never leave your device.";
@@ -423,9 +451,11 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Tangent.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Tangent/Preview Content\"";
+				DEVELOPMENT_TEAM = PU75NNGUW6;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Tangent uses the microphone to record your voice diary entries. Recordings never leave your device.";
@@ -556,6 +586,66 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		5CE7E2A0305D2BBB007DC982 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ml-explore/mlx-swift-lm.git";
+			requirement = {
+				kind = exactVersion;
+				version = 3.31.3;
+			};
+		};
+		5CE7E2C0305D2BBB007DC982 /* XCRemoteSwiftPackageReference "swift-huggingface" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/huggingface/swift-huggingface.git";
+			requirement = {
+				kind = exactVersion;
+				version = 0.9.0;
+			};
+		};
+		5CE7E2E0305D2BBB007DC982 /* XCRemoteSwiftPackageReference "swift-transformers" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/huggingface/swift-transformers";
+			requirement = {
+				kind = exactVersion;
+				version = 1.3.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		5CE7E2A1305D2BBB007DC982 /* MLXLLM */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5CE7E2A0305D2BBB007DC982 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
+			productName = MLXLLM;
+		};
+		5CE7E2A2305D2BBB007DC982 /* MLXVLM */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5CE7E2A0305D2BBB007DC982 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
+			productName = MLXVLM;
+		};
+		5CE7E2A3305D2BBB007DC982 /* MLXLMCommon */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5CE7E2A0305D2BBB007DC982 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
+			productName = MLXLMCommon;
+		};
+		5CE7E2A4305D2BBB007DC982 /* MLXHuggingFace */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5CE7E2A0305D2BBB007DC982 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
+			productName = MLXHuggingFace;
+		};
+		5CE7E2C1305D2BBB007DC982 /* HuggingFace */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5CE7E2C0305D2BBB007DC982 /* XCRemoteSwiftPackageReference "swift-huggingface" */;
+			productName = HuggingFace;
+		};
+		5CE7E2E1305D2BBB007DC982 /* Tokenizers */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5CE7E2E0305D2BBB007DC982 /* XCRemoteSwiftPackageReference "swift-transformers" */;
+			productName = Tokenizers;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 5CE7E19C305D2BBB007DC982 /* Project object */;
 }

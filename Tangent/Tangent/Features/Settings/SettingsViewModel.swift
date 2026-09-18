@@ -20,16 +20,22 @@ final class SettingsViewModel: ObservableObject {
     @Published var exportDocument: SettingsExportDocument?
     @Published var showsExporter = false
 
+    @Published private(set) var selectedModel = SummaryModelID.default
+    @Published private(set) var modelStates: [SummaryModelID: ModelDownloadState] = [:]
+
     private let noteStore: any NoteStore
     private let reminderScheduler: any ReminderScheduler
+    private let modelCatalog: (any ModelCatalog)?
     private var profile: PatientProfile?
 
     init(
         noteStore: any NoteStore,
-        reminderScheduler: any ReminderScheduler
+        reminderScheduler: any ReminderScheduler,
+        modelCatalog: (any ModelCatalog)? = nil
     ) {
         self.noteStore = noteStore
         self.reminderScheduler = reminderScheduler
+        self.modelCatalog = modelCatalog
     }
 
     func load() async {
@@ -123,6 +129,98 @@ final class SettingsViewModel: ObservableObject {
         case .failure:
             message = "Your diary could not be exported."
         }
+    }
+
+    // MARK: - Models
+
+    func loadModels() async {
+        guard let modelCatalog else { return }
+        selectedModel = modelCatalog.selectedModel
+        for model in SummaryModelID.allCases {
+            modelStates[model] = await modelCatalog.state(of: model)
+        }
+        await followDownloads()
+    }
+
+    /// A download started here keeps reporting through its own callback, but a
+    /// download begun before this screen was reopened has no one listening, so
+    /// its progress is read back from the catalog until it finishes.
+    private func followDownloads() async {
+        guard let modelCatalog else { return }
+        while !Task.isCancelled,
+              modelStates.values.contains(where: { $0.isDownloading }) {
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled else { return }
+            for model in SummaryModelID.allCases
+            where modelStates[model]?.isDownloading == true {
+                modelStates[model] = await modelCatalog.state(of: model)
+            }
+        }
+    }
+
+    /// Choosing a model only chooses it. Downloading is its own button on the
+    /// card, labelled with the size, so a multi-gigabyte transfer never starts
+    /// from a tap that looked like a preference.
+    func chooseModel(_ model: SummaryModelID) {
+        guard let modelCatalog else { return }
+        modelCatalog.select(model)
+        selectedModel = model
+    }
+
+    func download(_ model: SummaryModelID) async {
+        guard let modelCatalog else { return }
+        modelStates[model] = .downloading(
+            DownloadProgress(completedBytes: 0, totalBytes: 0)
+        )
+        do {
+            try await modelCatalog.download(model) { [weak self] progress in
+                self?.modelStates[model] = .downloading(progress)
+            }
+            modelStates[model] = await modelCatalog.state(of: model)
+        } catch is CancellationError {
+            modelStates[model] = await modelCatalog.state(of: model)
+        } catch {
+            modelStates[model] = .failed(message: error.localizedDescription)
+        }
+    }
+
+    func cancelDownload(_ model: SummaryModelID) async {
+        guard let modelCatalog else { return }
+        modelCatalog.cancelDownload(model)
+        modelStates[model] = await modelCatalog.state(of: model)
+    }
+
+    func deleteModel(_ model: SummaryModelID) async {
+        guard let modelCatalog else { return }
+        do {
+            try await modelCatalog.delete(model)
+            message = "\(model.displayName) removed."
+        } catch {
+            message = "\(model.displayName) could not be removed."
+        }
+        modelStates[model] = await modelCatalog.state(of: model)
+    }
+
+    func stateDescription(for model: SummaryModelID) -> String {
+        switch modelStates[model] ?? .notDownloaded {
+        case .notDownloaded:
+            "Not on this device"
+        case .downloading(let progress):
+            Self.downloadDescription(progress)
+        case .ready(let bytes):
+            "On this device · \(Self.size(bytes))"
+        case .failed(let message):
+            message
+        }
+    }
+
+    private static func downloadDescription(_ progress: DownloadProgress) -> String {
+        guard progress.totalBytes > 0 else { return "Starting download…" }
+        return "Downloading · \(size(progress.completedBytes)) of \(size(progress.totalBytes))"
+    }
+
+    private static func size(_ bytes: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }
 
     private func apply(_ profile: PatientProfile) {

@@ -30,23 +30,26 @@ struct ContentView: View {
                         DailyTangentDetailsView(
                             noteStore: dependencies.noteStore,
                             transcriber: dependencies.transcriber,
-                            healthModel: dependencies.healthModel,
+                            summaryGenerator: dependencies.summaryGenerator,
                             diaryID: diaryID,
-                            redoToday: startNewRecording
+                            redoToday: startNewRecording,
+                            openSettings: { diaryPath.append(.settings) }
                         )
                     case .freshRecording(let diaryID):
                         DailyTangentDetailsView(
                             noteStore: dependencies.noteStore,
                             transcriber: dependencies.transcriber,
-                            healthModel: dependencies.healthModel,
+                            summaryGenerator: dependencies.summaryGenerator,
                             diaryID: diaryID,
                             streamsTranscript: true,
-                            redoToday: startNewRecording
+                            redoToday: startNewRecording,
+                            openSettings: { diaryPath.append(.settings) }
                         )
                     case .settings:
                         SettingsView(
                             noteStore: dependencies.noteStore,
-                            reminderScheduler: dependencies.reminderScheduler
+                            reminderScheduler: dependencies.reminderScheduler,
+                            modelCatalog: dependencies.modelCatalog
                         )
                     }
                 }
@@ -64,6 +67,7 @@ struct ContentView: View {
                     audioRecorder: dependencies.audioRecorder,
                     transcriber: dependencies.transcriber,
                     noteStore: dependencies.noteStore,
+                    summaryGenerator: dependencies.summaryGenerator,
                     openSettings: { recordPath.append(.settings) },
                     onRecordingFinished: showDailySummary(for:),
                     isActive: selectedTab == .record
@@ -74,7 +78,8 @@ struct ContentView: View {
                     case .settings:
                         SettingsView(
                             noteStore: dependencies.noteStore,
-                            reminderScheduler: dependencies.reminderScheduler
+                            reminderScheduler: dependencies.reminderScheduler,
+                            modelCatalog: dependencies.modelCatalog
                         )
                     }
                 }
@@ -184,7 +189,9 @@ private enum RecordRoute: Hashable {
             audioRecorder: UnavailableAudioRecorder(),
             transcriber: UnavailableTranscriber(),
             healthModel: MockHealthLanguageModel(responseDelay: .zero),
-            reminderScheduler: UnavailableReminderScheduler()
+            reminderScheduler: UnavailableReminderScheduler(),
+            summaryGenerator: UnavailableSummaryGenerator(),
+            modelCatalog: MLXModelCatalog()
         )
     )
 }
