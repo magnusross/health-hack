@@ -288,9 +288,9 @@ struct TangentTests {
         )
 
         await model.generateInsight()
-        #expect(model.insights.count == 1)
-        #expect(model.insights.first?.generatedFrom == model.fromDate)
-        #expect(model.insights.first?.generatedTo == model.toDate)
+        #expect(model.generatedInsight?.generatedFrom == model.fromDate)
+        #expect(model.generatedInsight?.generatedTo == model.toDate)
+        #expect(try await store.insights().count == 1)
     }
 
     @Test @MainActor

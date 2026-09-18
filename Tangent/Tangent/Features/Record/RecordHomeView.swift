@@ -13,6 +13,8 @@ struct RecordHomeView: View {
     private let instructionDelay: TimeInterval
     /// Forces the Reduce Motion presentation in previews.
     private let forcesReducedMotion: Bool
+    /// True while the Record tab is selected. The instruction fades in on each visit.
+    private let isActive: Bool
 
     @State private var showsInstruction = false
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
@@ -24,7 +26,8 @@ struct RecordHomeView: View {
         openSettings: @escaping () -> Void,
         onRecordingFinished: @escaping (UUID) -> Void,
         instructionDelay: TimeInterval = 3,
-        forcesReducedMotion: Bool = false
+        forcesReducedMotion: Bool = false,
+        isActive: Bool = true
     ) {
         _model = StateObject(
             wrappedValue: RecordHomeViewModel(
@@ -37,6 +40,7 @@ struct RecordHomeView: View {
         self.onRecordingFinished = onRecordingFinished
         self.instructionDelay = instructionDelay
         self.forcesReducedMotion = forcesReducedMotion
+        self.isActive = isActive
     }
 
     private var reduceMotion: Bool {
@@ -73,10 +77,16 @@ struct RecordHomeView: View {
                 SettingsToolbarButton(action: openSettings)
             }
         }
-        .task {
+        .task(id: isActive) {
+            guard isActive else {
+                showsInstruction = false
+                return
+            }
+            showsInstruction = false
             if instructionDelay > 0 {
                 try? await Task.sleep(for: .seconds(instructionDelay))
             }
+            guard !Task.isCancelled else { return }
             withAnimation(reduceMotion ? nil : .easeInOut(duration: 1.4)) {
                 showsInstruction = true
             }

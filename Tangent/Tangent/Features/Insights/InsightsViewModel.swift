@@ -3,10 +3,8 @@ import Foundation
 
 @MainActor
 final class InsightsViewModel: ObservableObject {
-    @Published private(set) var insights: [Insight] = []
-    @Published private(set) var isLoading = true
+    @Published private(set) var generatedInsight: Insight?
     @Published private(set) var isGenerating = false
-    @Published private(set) var loadError: String?
     @Published private(set) var generationError: String?
     @Published private(set) var fromDate: Date
     @Published private(set) var toDate: Date
@@ -31,18 +29,6 @@ final class InsightsViewModel: ObservableObject {
         fromDate = calendar.date(byAdding: .day, value: -14, to: today) ?? today
     }
 
-    func load() async {
-        isLoading = true
-        defer { isLoading = false }
-
-        do {
-            insights = try await noteStore.insights()
-            loadError = nil
-        } catch {
-            loadError = "Your insights could not be loaded."
-        }
-    }
-
     var earliestFromDate: Date {
         calendar.date(byAdding: .day, value: -14, to: toDate) ?? toDate
     }
@@ -63,6 +49,7 @@ final class InsightsViewModel: ObservableObject {
     func generateInsight() async {
         guard !isGenerating else { return }
         isGenerating = true
+        generatedInsight = nil
         generationError = nil
         defer { isGenerating = false }
 
@@ -88,7 +75,7 @@ final class InsightsViewModel: ObservableObject {
                 text: text
             )
             try await noteStore.saveInsight(insight)
-            insights = try await noteStore.insights()
+            generatedInsight = insight
         } catch {
             generationError = "Your insight could not be generated."
         }

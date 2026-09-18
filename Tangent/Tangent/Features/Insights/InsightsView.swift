@@ -16,28 +16,12 @@ struct InsightsView: View {
     }
 
     var body: some View {
-        Group {
-            if model.isLoading && model.insights.isEmpty {
-                ProgressView()
-                    .tint(Color.tangentPurple)
-            } else if let loadError = model.loadError {
-                ContentUnavailableView(
-                    "Unable to load insights",
-                    systemImage: "exclamationmark.circle",
-                    description: Text(loadError)
-                )
-            } else {
-                insightsContent
-            }
-        }
+        insightsContent
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .foregroundStyle(Color.tangentInk)
         .background(Color.tangentWash)
         .navigationTitle("Insights")
         .navigationBarTitleDisplayMode(.inline)
-        .task {
-            await model.load()
-        }
     }
 
     private var insightsContent: some View {
@@ -46,7 +30,9 @@ struct InsightsView: View {
                 VStack(spacing: 24) {
                     generator
 
-                    ForEach(model.insights) { insight in
+                    if model.isGenerating {
+                        waitingIndicator
+                    } else if let insight = model.generatedInsight {
                         insightBlock(insight)
                     }
                 }
@@ -58,9 +44,19 @@ struct InsightsView: View {
                     alignment: .center
                 )
             }
-            .refreshable {
-                await model.load()
-            }
+        }
+    }
+
+    private var waitingIndicator: some View {
+        TimelineView(.periodic(from: .now, by: 0.4)) { context in
+            let step = Int(
+                context.date.timeIntervalSinceReferenceDate / 0.4
+            ) % 3 + 1
+            Text(String(repeating: ".", count: step))
+                .font(.system(.title, design: .monospaced, weight: .semibold))
+                .foregroundStyle(Color.tangentPurple)
+                .frame(width: 52, height: 44, alignment: .leading)
+                .accessibilityLabel("Generating insight")
         }
     }
 

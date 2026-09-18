@@ -64,7 +64,8 @@ struct ContentView: View {
                     transcriber: dependencies.transcriber,
                     noteStore: dependencies.noteStore,
                     openSettings: { recordPath.append(.settings) },
-                    onRecordingFinished: showDailySummary(for:)
+                    onRecordingFinished: showDailySummary(for:),
+                    isActive: selectedTab == .record
                 )
                 .navigationDestination(for: RecordRoute.self) { route in
                     switch route {
