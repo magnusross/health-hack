@@ -89,6 +89,7 @@ struct DailyTangentDetailsView: View {
         .background(Color.tangentWash)
         .navigationTitle("Daily Tangent")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
         .task {
             await model.start()
         }

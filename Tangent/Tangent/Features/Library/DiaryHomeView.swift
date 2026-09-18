@@ -37,11 +37,16 @@ struct DiaryHomeView: View {
             }
         }
         .background(Color.tangentWash)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                SettingsToolbarButton(action: openSettings)
-            }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            Color.tangentWash
+                .frame(height: 32)
+                .allowsHitTesting(false)
         }
+        .overlay(alignment: .topTrailing) {
+            SettingsToolbarButton(action: openSettings)
+                .padding(.trailing, 6)
+        }
+        .toolbar(.hidden, for: .navigationBar)
         .task {
             await model.load()
         }
@@ -72,6 +77,7 @@ struct DiaryHomeView: View {
                 .frame(maxWidth: .infinity)
                 .frame(minHeight: proxy.size.height, alignment: .center)
             }
+            .contentMargins(.top, 44, for: .scrollContent)
             .defaultScrollAnchor(.bottom)
             .refreshable {
                 await model.load()
@@ -82,6 +88,7 @@ struct DiaryHomeView: View {
     private var firstEntryAction: some View {
         todayRecordCard(on: calendar.startOfDay(for: Date()))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.top, 44)
             .padding(.bottom, 40)
     }
 
