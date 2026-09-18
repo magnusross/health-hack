@@ -41,6 +41,15 @@ struct DiaryHomeView: View {
             SettingsToolbarButton(action: openSettings)
                 .padding(.trailing, 6)
         }
+        .overlay(alignment: .topLeading) {
+            Image("Logo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 25, height: 25)
+                .frame(width: 44, height: 44)
+                .padding(.leading, 6)
+                .accessibilityLabel("Tangent")
+        }
         .toolbar(.hidden, for: .navigationBar)
         .toolbarBackground(.hidden, for: .tabBar)
         .toolbarBackgroundVisibility(.hidden, for: .tabBar)

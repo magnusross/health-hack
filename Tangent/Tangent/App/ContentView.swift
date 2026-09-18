@@ -23,6 +23,7 @@ struct ContentView: View {
                     openRecord: { selectedTab = .record },
                     openSettings: { diaryPath.append(.settings) }
                 )
+                .tangentLogoToolbar()
                 .navigationDestination(for: DiaryRoute.self) { route in
                     switch route {
                     case .details(let diaryID):
@@ -33,6 +34,7 @@ struct ContentView: View {
                             diaryID: diaryID,
                             redoToday: startNewRecording
                         )
+                        .tangentLogoToolbar()
                     case .freshRecording(let diaryID):
                         DailyTangentDetailsView(
                             noteStore: dependencies.noteStore,
@@ -42,15 +44,16 @@ struct ContentView: View {
                             streamsTranscript: true,
                             redoToday: startNewRecording
                         )
+                        .tangentLogoToolbar()
                     case .settings:
                         SettingsView(
                             noteStore: dependencies.noteStore,
                             reminderScheduler: dependencies.reminderScheduler
                         )
+                        .tangentLogoToolbar()
                     }
                 }
             }
-            .toolbar { appLogoToolbarItem }
             .toolbarBackground(.hidden, for: .tabBar)
             .toolbarBackgroundVisibility(.hidden, for: .tabBar)
             .tabItem {
@@ -68,6 +71,7 @@ struct ContentView: View {
                     onRecordingFinished: showDailySummary(for:),
                     isActive: selectedTab == .record
                 )
+                .tangentLogoToolbar()
                 .navigationDestination(for: RecordRoute.self) { route in
                     switch route {
                     case .settings:
@@ -75,10 +79,10 @@ struct ContentView: View {
                             noteStore: dependencies.noteStore,
                             reminderScheduler: dependencies.reminderScheduler
                         )
+                        .tangentLogoToolbar()
                     }
                 }
             }
-            .toolbar { appLogoToolbarItem }
             .toolbarBackground(.hidden, for: .tabBar)
             .toolbarBackgroundVisibility(.hidden, for: .tabBar)
             .tabItem {
@@ -92,8 +96,8 @@ struct ContentView: View {
                     noteStore: dependencies.noteStore,
                     healthModel: dependencies.healthModel
                 )
+                .tangentLogoToolbar()
             }
-            .toolbar { appLogoToolbarItem }
             .toolbarBackground(.hidden, for: .tabBar)
             .toolbarBackgroundVisibility(.hidden, for: .tabBar)
             .tabItem {
@@ -114,17 +118,6 @@ struct ContentView: View {
         }
         .animation(.easeInOut(duration: 0.25), value: coversRecordTransition)
         .animation(.easeInOut(duration: 0.25), value: selectedTab)
-    }
-
-    @ToolbarContentBuilder
-    private var appLogoToolbarItem: some ToolbarContent {
-        ToolbarItem(placement: .topBarLeading) {
-            Image("Logo")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 25, height: 25)
-                .accessibilityLabel("Tangent")
-        }
     }
 
     private func showDailySummary(for diaryID: UUID) {
@@ -153,6 +146,20 @@ struct ContentView: View {
         UITabBar.appearance().standardAppearance = appearance
         UITabBar.appearance().scrollEdgeAppearance = appearance
         UITabBar.appearance().isTranslucent = true
+    }
+}
+
+private extension View {
+    func tangentLogoToolbar() -> some View {
+        toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Image("Logo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 25, height: 25)
+                    .accessibilityLabel("Tangent")
+            }
+        }
     }
 }
 
