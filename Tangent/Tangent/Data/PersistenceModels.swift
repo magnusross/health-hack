@@ -8,10 +8,20 @@ final class PatientProfileRecord {
     var age: Int?
     var weight: Double?
     var gender: String
-    var healthInterests: [String]
-    var healthConcerns: [String]
+    private var healthInterestsData: Data?
+    private var healthConcernsData: Data?
     var email: String
     var dailyReminder: Date?
+
+    var healthInterests: [String] {
+        get { StringArrayStorage.decode(healthInterestsData) }
+        set { healthInterestsData = StringArrayStorage.encode(newValue) }
+    }
+
+    var healthConcerns: [String] {
+        get { StringArrayStorage.decode(healthConcernsData) }
+        set { healthConcernsData = StringArrayStorage.encode(newValue) }
+    }
 
     init(profile: PatientProfile) {
         id = profile.id
@@ -19,8 +29,8 @@ final class PatientProfileRecord {
         age = profile.age
         weight = profile.weight
         gender = profile.gender
-        healthInterests = profile.healthInterests
-        healthConcerns = profile.healthConcerns
+        healthInterestsData = StringArrayStorage.encode(profile.healthInterests)
+        healthConcernsData = StringArrayStorage.encode(profile.healthConcerns)
         email = profile.email
         dailyReminder = profile.dailyReminder
     }
@@ -48,6 +58,17 @@ final class PatientProfileRecord {
             email: email,
             dailyReminder: dailyReminder
         )
+    }
+}
+
+private enum StringArrayStorage {
+    static func encode(_ strings: [String]) -> Data {
+        (try? JSONEncoder().encode(strings)) ?? Data("[]".utf8)
+    }
+
+    static func decode(_ data: Data?) -> [String] {
+        guard let data else { return [] }
+        return (try? JSONDecoder().decode([String].self, from: data)) ?? []
     }
 }
 

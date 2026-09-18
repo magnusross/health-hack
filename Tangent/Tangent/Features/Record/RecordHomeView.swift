@@ -118,15 +118,22 @@ struct RecordHomeView: View {
     private var promptingQuestion: some View {
         ZStack {
             if model.isRecording, let question = model.currentPromptQuestion {
-                Text(question)
-                    .id(question)
-                    .font(.system(.title3, weight: .regular))
-                    .foregroundStyle(Color.tangentInk.opacity(0.78))
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(5)
-                    .frame(maxWidth: 320)
-                    .transition(.opacity)
-                    .accessibilityLabel("Prompt: \(question)")
+                ZStack {
+                    PromptCloud(reduceMotion: reduceMotion)
+                        .frame(width: 350, height: 112)
+
+                    Text(question)
+                        .font(.system(.title3, weight: .regular))
+                        .foregroundStyle(Color.tangentInk.opacity(0.74))
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(5)
+                        .frame(maxWidth: 300)
+                        .padding(.horizontal, 20)
+                }
+                .id(question)
+                .transition(.opacity)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Prompt: \(question)")
             } else if model.showsQuestionSuggestionOffer {
                 Button {
                     Task { await model.acceptQuestionSuggestions() }
@@ -227,6 +234,95 @@ struct RecordHomeView: View {
         case .recording:
             return "Recording"
         }
+    }
+}
+
+/// A quiet, cloud-like backdrop for optional recording prompts. It is kept
+/// deliberately pale so the recording orb remains the visual focal point.
+private struct PromptCloud: View {
+    let reduceMotion: Bool
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 24.0, paused: reduceMotion)) { context in
+            let time = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
+            let shape = PromptCloudShape(time: time, deformation: reduceMotion ? 0 : 1)
+
+            ZStack {
+                shape
+                    .fill(Color.white.opacity(0.42))
+                    .blur(radius: 10)
+
+                shape
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                Color.white.opacity(0.52),
+                                Color.tangentGold.opacity(0.14),
+                                Color.tangentGold.opacity(0.025),
+                                .clear,
+                            ],
+                            center: UnitPoint(
+                                x: 0.38 + 0.04 * sin(time * 0.12),
+                                y: 0.48 + 0.04 * cos(time * 0.1)
+                            ),
+                            startRadius: 2,
+                            endRadius: 175
+                        )
+                    )
+                    .blur(radius: 4)
+            }
+            .scaleEffect(
+                x: 1 + (reduceMotion ? 0 : 0.008 * sin(time * 0.22)),
+                y: 1 + (reduceMotion ? 0 : 0.012 * cos(time * 0.18))
+            )
+        }
+        .accessibilityHidden(true)
+        .allowsHitTesting(false)
+    }
+}
+
+private struct PromptCloudShape: Shape {
+    let time: TimeInterval
+    let deformation: Double
+
+    func path(in rect: CGRect) -> Path {
+        let waves: [(Double, Double)] = [
+            (0.035, 0.0), (0.055, 1.2), (0.04, 2.4), (0.06, 3.5),
+            (0.045, 4.7), (0.05, 5.5), (0.04, 0.8), (0.055, 2.0),
+        ]
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let points = waves.enumerated().map { index, wave in
+            let angle = 2 * Double.pi * Double(index) / Double(waves.count)
+            let ripple = deformation * wave.0 * sin(time * 0.24 + wave.1)
+            let horizontalRadius = rect.width * 0.46 * (1 + ripple)
+            let verticalRadius = rect.height * 0.39 * (1 + ripple * 1.4)
+            return CGPoint(
+                x: center.x + horizontalRadius * cos(angle),
+                y: center.y + verticalRadius * sin(angle)
+            )
+        }
+
+        var path = Path()
+        path.move(to: points[0])
+        for index in points.indices {
+            let p0 = points[(index - 1 + points.count) % points.count]
+            let p1 = points[index]
+            let p2 = points[(index + 1) % points.count]
+            let p3 = points[(index + 2) % points.count]
+            path.addCurve(
+                to: p2,
+                control1: CGPoint(
+                    x: p1.x + (p2.x - p0.x) / 6,
+                    y: p1.y + (p2.y - p0.y) / 6
+                ),
+                control2: CGPoint(
+                    x: p2.x - (p3.x - p1.x) / 6,
+                    y: p2.y - (p3.y - p1.y) / 6
+                )
+            )
+        }
+        path.closeSubpath()
+        return path
     }
 }
 
