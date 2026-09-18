@@ -12,13 +12,14 @@ final class RecordHomeViewModel: ObservableObject {
     @Published private(set) var elapsed: TimeInterval = 0
     @Published private(set) var currentPromptQuestion: String?
     @Published private(set) var promptedQuestions: [DiaryQuestion] = []
-    @Published private(set) var questionSuggestionsEnabled = true
+    @Published private(set) var showsQuestionSuggestionOffer = false
 
     private let audioRecorder: any AudioRecorder
     private let transcriber: any Transcriber
     private let noteStore: any NoteStore
     private var elapsedTask: Task<Void, Never>?
     private var questionTask: Task<Void, Never>?
+    private var suggestionOfferTask: Task<Void, Never>?
     private var isFinishing = false
     private let initialQuestionDelay: Duration
     private let questionInterval: Duration
@@ -50,7 +51,7 @@ final class RecordHomeViewModel: ObservableObject {
         return String(format: "%d:%02d", minutes, seconds)
     }
 
-    func startRecording(suggestQuestions: Bool = true) async {
+    func startRecording() async {
         guard !isBusy else { return }
         switch phase {
         case .idle, .failed:
@@ -64,12 +65,10 @@ final class RecordHomeViewModel: ObservableObject {
             elapsed = 0
             promptedQuestions = []
             currentPromptQuestion = nil
-            questionSuggestionsEnabled = suggestQuestions
+            showsQuestionSuggestionOffer = false
             phase = .recording
             startElapsedTimer()
-            if questionSuggestionsEnabled {
-                await startQuestionStream()
-            }
+            scheduleQuestionSuggestionOffer()
         } catch {
             phase = .failed(message: error.localizedDescription)
         }
@@ -81,6 +80,7 @@ final class RecordHomeViewModel: ObservableObject {
         guard phase == .recording, !isFinishing else { return nil }
         isFinishing = true
         stopElapsedTimer()
+        stopSuggestionOffer()
         stopQuestionStream()
         phase = .idle
         defer { isFinishing = false }
@@ -101,17 +101,13 @@ final class RecordHomeViewModel: ObservableObject {
     deinit {
         elapsedTask?.cancel()
         questionTask?.cancel()
+        suggestionOfferTask?.cancel()
     }
 
-    func setQuestionSuggestionsEnabled(_ enabled: Bool) async {
-        questionSuggestionsEnabled = enabled
-        guard isRecording else { return }
-
-        if enabled {
-            await startQuestionStream()
-        } else {
-            stopQuestionStream()
-        }
+    func acceptQuestionSuggestions() async {
+        guard isRecording, showsQuestionSuggestionOffer else { return }
+        stopSuggestionOffer()
+        await startQuestionStream()
     }
 
     private func saveTodayEntry(
@@ -194,7 +190,7 @@ final class RecordHomeViewModel: ObservableObject {
         questionTask?.cancel()
         questionTask = Task { [weak self] in
             guard let self else { return }
-            try? await Task.sleep(for: initialQuestionDelay)
+            try? await Task.sleep(for: questionTransitionDelay)
 
             for question in shuffledQuestions {
                 guard !Task.isCancelled, isRecording else { return }
@@ -216,6 +212,22 @@ final class RecordHomeViewModel: ObservableObject {
         questionTask?.cancel()
         questionTask = nil
         currentPromptQuestion = nil
+    }
+
+    private func scheduleQuestionSuggestionOffer() {
+        suggestionOfferTask?.cancel()
+        suggestionOfferTask = Task { [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(for: initialQuestionDelay)
+            guard !Task.isCancelled, isRecording else { return }
+            showsQuestionSuggestionOffer = true
+        }
+    }
+
+    private func stopSuggestionOffer() {
+        suggestionOfferTask?.cancel()
+        suggestionOfferTask = nil
+        showsQuestionSuggestionOffer = false
     }
 
     private static func newRecordingDestination() -> URL {

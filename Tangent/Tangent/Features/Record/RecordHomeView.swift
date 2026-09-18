@@ -17,7 +17,6 @@ struct RecordHomeView: View {
     private let isActive: Bool
 
     @State private var showsInstruction = false
-    @AppStorage("suggestQuestionsEnabled") private var suggestQuestionsEnabled = true
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
 
     init(
@@ -78,27 +77,11 @@ struct RecordHomeView: View {
             }
         }
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                if model.isRecording {
-                    Toggle("Suggest questions", isOn: $suggestQuestionsEnabled)
-                        .font(.system(.caption))
-                        .onChange(of: suggestQuestionsEnabled) { _, enabled in
-                            Task {
-                                await model.setQuestionSuggestionsEnabled(enabled)
-                            }
-                        }
-                        .transition(.opacity)
-                }
-            }
-
             ToolbarItem(placement: .topBarTrailing) {
                 SettingsToolbarButton(action: openSettings)
             }
         }
         .task(id: isActive) {
-            await model.setQuestionSuggestionsEnabled(
-                suggestQuestionsEnabled
-            )
             guard isActive else {
                 showsInstruction = false
                 return
@@ -144,13 +127,29 @@ struct RecordHomeView: View {
                     .frame(maxWidth: 320)
                     .transition(.opacity)
                     .accessibilityLabel("Prompt: \(question)")
+            } else if model.showsQuestionSuggestionOffer {
+                Button {
+                    Task { await model.acceptQuestionSuggestions() }
+                } label: {
+                    Text("Suggest prompts")
+                        .font(.system(.body, weight: .medium))
+                        .foregroundStyle(.gray)
+                        .padding(.vertical, 12)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .transition(.opacity)
+                .accessibilityHint("Shows gentle questions while you record")
             }
         }
         .frame(width: 330, height: 80)
-        .allowsHitTesting(false)
         .animation(
             reduceMotion ? nil : .easeInOut(duration: 1.8),
             value: model.currentPromptQuestion
+        )
+        .animation(
+            reduceMotion ? nil : .easeInOut(duration: 1.8),
+            value: model.showsQuestionSuggestionOffer
         )
     }
 
@@ -217,9 +216,7 @@ struct RecordHomeView: View {
     private func startRecordingIfIdle() {
         guard !model.isBusy else { return }
         Task {
-            await model.startRecording(
-                suggestQuestions: suggestQuestionsEnabled
-            )
+            await model.startRecording()
         }
     }
 
