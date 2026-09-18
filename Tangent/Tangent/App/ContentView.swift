@@ -23,6 +23,7 @@ struct ContentView: View {
                         DailyTangentDetailsView(
                             noteStore: dependencies.noteStore,
                             transcriber: dependencies.transcriber,
+                            healthModel: dependencies.healthModel,
                             diaryID: diaryID,
                             redoToday: startNewRecording
                         )
@@ -30,6 +31,7 @@ struct ContentView: View {
                         DailyTangentDetailsView(
                             noteStore: dependencies.noteStore,
                             transcriber: dependencies.transcriber,
+                            healthModel: dependencies.healthModel,
                             diaryID: diaryID,
                             streamsTranscript: true,
                             redoToday: startNewRecording

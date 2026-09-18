@@ -89,7 +89,9 @@ final class RecordHomeViewModel: ObservableObject {
             throw RecordPersistenceError.missingProfile
         }
 
-        let summary = Self.summarize(transcript)
+        let summary = transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? "…"
+            : Self.summarize(transcript)
         let entry = DiaryEntry(
             patientID: patient.id,
             day: Date(),

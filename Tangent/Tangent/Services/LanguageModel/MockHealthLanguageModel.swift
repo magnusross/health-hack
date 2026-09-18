@@ -6,7 +6,7 @@ final class MockHealthLanguageModel: HealthLanguageModel {
 
     private let responseDelay: Duration
 
-    init(responseDelay: Duration = .milliseconds(350)) {
+    init(responseDelay: Duration = .seconds(2)) {
         self.responseDelay = responseDelay
     }
 

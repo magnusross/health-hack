@@ -10,17 +10,20 @@ final class DailyTangentDetailsViewModel: ObservableObject {
 
     private let noteStore: any NoteStore
     private let transcriber: (any Transcriber)?
+    private let healthModel: (any HealthLanguageModel)?
     private let diaryID: UUID
     let streamsTranscript: Bool
 
     init(
         noteStore: any NoteStore,
         transcriber: (any Transcriber)? = nil,
+        healthModel: (any HealthLanguageModel)? = nil,
         diaryID: UUID,
         streamsTranscript: Bool = false
     ) {
         self.noteStore = noteStore
         self.transcriber = transcriber
+        self.healthModel = healthModel
         self.diaryID = diaryID
         self.streamsTranscript = streamsTranscript
     }
@@ -113,15 +116,31 @@ final class DailyTangentDetailsViewModel: ObservableObject {
         guard var entry else { return }
         let audioPath = entry.transcriptPath
         let storedPath = try RecordHomeViewModel.writeTranscript(transcript)
-        entry.summaryShort = RecordHomeViewModel.summarize(transcript)
+        entry.summaryShort = "…"
         entry.summaryLong = transcript
         entry.transcriptPath = storedPath
         try await noteStore.saveDiaryEntry(entry)
         self.entry = entry
+
         if audioPath != storedPath {
             try? FileManager.default.removeItem(
                 at: URL(fileURLWithPath: audioPath)
             )
         }
+
+        let summary: String
+        if let healthModel {
+            do {
+                summary = try await healthModel.summarize(transcript: transcript)
+            } catch {
+                summary = RecordHomeViewModel.summarize(transcript)
+            }
+        } else {
+            summary = RecordHomeViewModel.summarize(transcript)
+        }
+
+        entry.summaryShort = summary
+        try await noteStore.saveDiaryEntry(entry)
+        self.entry = entry
     }
 }
