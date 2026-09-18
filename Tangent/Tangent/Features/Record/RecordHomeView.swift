@@ -127,7 +127,9 @@ struct RecordHomeView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityAddTraits(model.isRecording ? [] : .isButton)
         .accessibilityLabel(orbAccessibilityLabel)
-        .accessibilityAction(startRecordingIfIdle)
+        .accessibilityAction {
+            startRecordingIfIdle()
+        }
     }
 
     private var promptingQuestion: some View {
