@@ -116,7 +116,7 @@ struct ContentView: View {
                 Image("Logo")
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 30, height: 30)
+                    .frame(width: 25, height: 25)
                     .accessibilityLabel("Tangent")
 
                 if dependencies.healthModel.isMock {
@@ -132,8 +132,9 @@ struct ContentView: View {
 
                 Spacer()
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 3)
+            .padding(.leading, 16)
+            .padding(.trailing, 12)
+            .padding(.top, 6)
         }
     }
 
