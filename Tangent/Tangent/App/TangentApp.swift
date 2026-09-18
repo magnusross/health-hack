@@ -20,6 +20,7 @@ struct TangentApp: App {
                 ),
                 audioRecorder: AVAudioRecorderService(),
                 transcriber: OnDeviceTranscriber(),
+                healthModel: MockHealthLanguageModel(),
                 reminderScheduler: LocalReminderScheduler()
             )
         } catch {

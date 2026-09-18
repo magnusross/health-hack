@@ -11,7 +11,7 @@ final class SettingsViewModel: ObservableObject {
     @Published private(set) var healthConcerns = "—"
     @Published private(set) var email = "—"
     @Published private(set) var reminderEnabled = true
-    @Published private(set) var dailyReminder = Date()
+    @Published private(set) var dailyReminder = SettingsViewModel.defaultReminderTime()
 
     @Published private(set) var profileID: UUID?
     @Published private(set) var isLoading = true
@@ -69,11 +69,30 @@ final class SettingsViewModel: ObservableObject {
             }
             try await noteStore.savePatientProfile(profile)
             self.profile = profile
-            message = enabled
-                ? "Daily reminder scheduled."
-                : "Daily reminder turned off."
+            message = nil
         } catch {
             reminderEnabled = previousReminder != nil
+            profile.dailyReminder = previousReminder
+            self.profile = profile
+            message = error.localizedDescription
+        }
+    }
+
+    func setReminderTime(_ time: Date) async {
+        guard var profile, reminderEnabled, !isUpdatingReminder else { return }
+        let previousReminder = profile.dailyReminder
+        dailyReminder = time
+        isUpdatingReminder = true
+        defer { isUpdatingReminder = false }
+
+        do {
+            profile.dailyReminder = time
+            try await reminderScheduler.scheduleDailyReminder(at: time)
+            try await noteStore.savePatientProfile(profile)
+            self.profile = profile
+            message = nil
+        } catch {
+            dailyReminder = previousReminder ?? Self.defaultReminderTime()
             profile.dailyReminder = previousReminder
             self.profile = profile
             message = error.localizedDescription
@@ -106,11 +125,6 @@ final class SettingsViewModel: ObservableObject {
         }
     }
 
-    var formattedReminderTime: String {
-        guard reminderEnabled else { return "—" }
-        return dailyReminder.formatted(date: .omitted, time: .shortened)
-    }
-
     private func apply(_ profile: PatientProfile) {
         self.profile = profile
         profileID = profile.id
@@ -128,6 +142,17 @@ final class SettingsViewModel: ObservableObject {
             : profile.healthConcerns.joined(separator: ", ")
         email = profile.email.isEmpty ? "—" : profile.email
         reminderEnabled = profile.dailyReminder != nil
-        dailyReminder = profile.dailyReminder ?? Date()
+        dailyReminder = profile.dailyReminder ?? Self.defaultReminderTime()
+    }
+
+    nonisolated private static func defaultReminderTime(
+        calendar: Calendar = .autoupdatingCurrent
+    ) -> Date {
+        calendar.date(
+            bySettingHour: 21,
+            minute: 0,
+            second: 0,
+            of: Date()
+        ) ?? Date()
     }
 }

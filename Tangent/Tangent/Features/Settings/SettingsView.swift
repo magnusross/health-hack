@@ -41,7 +41,22 @@ struct SettingsView: View {
                     )
                 )
                 .disabled(model.isUpdatingReminder || model.isLoading)
-                LabeledContent("Time", value: model.formattedReminderTime)
+
+                DatePicker(
+                    "Time",
+                    selection: Binding(
+                        get: { model.dailyReminder },
+                        set: { time in
+                            Task { await model.setReminderTime(time) }
+                        }
+                    ),
+                    displayedComponents: .hourAndMinute
+                )
+                .disabled(
+                    !model.reminderEnabled
+                        || model.isUpdatingReminder
+                        || model.isLoading
+                )
             }
 
             if let message = model.message {

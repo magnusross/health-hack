@@ -7,7 +7,7 @@
 - `Tangent/Features/Record/` and `Tangent/Features/Library/` own their respective SwiftUI views and feature logic.
 - `Tangent/Domain/` contains persistence-independent app models and service protocols.
 - `Tangent/Data/` contains SwiftData models, domain conversions, container setup, and the `NoteStore` implementation.
-- `Tangent/Services/Audio/` and `Tangent/Services/Speech/` contain concrete media service implementations.
+- `Tangent/Services/Audio/`, `Tangent/Services/Speech/`, and `Tangent/Services/LanguageModel/` contain concrete service implementations.
 
 ## Dependency direction
 
@@ -21,4 +21,4 @@ Use an in-memory container for tests and previews. The app uses the default loca
 
 ## Adding workflows
 
-Inject `NoteStore`, `AudioRecorder`, and `Transcriber` from `AppDependencies`. Add real recording and transcription implementations under their service directories and replace the unavailable placeholders in `TangentApp`. New workflows should add domain operations when needed and use protocols rather than importing SwiftData into feature code.
+Inject `NoteStore`, `AudioRecorder`, `Transcriber`, and `HealthLanguageModel` from `AppDependencies`. The app currently injects `MockHealthLanguageModel`, which keeps Simulator development independent of MLX and exposes its mock state to the UI. A future MLX implementation should be the only type that imports MLX and can replace the mock in `TangentApp` when model files are available. New workflows should add domain operations when needed and use protocols rather than importing SwiftData into feature code.

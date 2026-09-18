@@ -228,6 +228,28 @@ struct TangentTests {
         #expect(path.hasSuffix(".txt"))
     }
 
+    @Test
+    func mockHealthModelReturnsCannedResponses() async throws {
+        let model = MockHealthLanguageModel(responseDelay: .zero)
+        let patientID = UUID()
+        let entry = DiaryEntry(
+            patientID: patientID,
+            day: Date(),
+            promptText: "Prompt",
+            summaryShort: "A steady day"
+        )
+
+        #expect(model.isMock)
+        #expect(
+            try await model.summarize(transcript: "I felt calm today.")
+                == "You reflected on how you have been feeling today."
+        )
+        #expect(
+            try await model.generateInsights(from: [entry])
+                .contains("rest, routine, and energy")
+        )
+    }
+
     @Test @MainActor
     func demoDataSeederCreatesEntriesOnce() async throws {
         let container = try TangentModelContainer.make(inMemory: true)
