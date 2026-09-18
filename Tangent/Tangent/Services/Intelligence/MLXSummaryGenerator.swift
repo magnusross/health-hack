@@ -1,5 +1,6 @@
 import Foundation
 import HuggingFace
+import OSLog
 import MLX
 import MLXHuggingFace
 import MLXLMCommon
@@ -10,6 +11,9 @@ import Tokenizers
 /// An actor so generation is serialised and never touches the main thread, and
 /// so the loaded model has one owner.
 actor MLXSummaryGenerator: SummaryGenerator {
+    /// Read with: log stream --device --predicate 'subsystem == "Personal.Tangent"'
+    private static let log = Logger(subsystem: "Personal.Tangent", category: "Summary")
+
     /// The one resident model. 0.8 GB and 2.5 GB together will get the app
     /// killed on iOS, so switching models drops the previous one.
     private var loaded: (model: SummaryModelID, container: ModelContainer)?
@@ -47,6 +51,7 @@ actor MLXSummaryGenerator: SummaryGenerator {
         let first = try await complete(
             prompt: prompt,
             in: container,
+            attempt: 1,
             onShortSummary: onShortSummary
         )
         if let parsed = SummaryJSON.parse(first) {
@@ -57,12 +62,27 @@ actor MLXSummaryGenerator: SummaryGenerator {
             )
         }
 
+        // The output did not parse, but the short summary may still have been
+        // finished before the model ran out of room. That is the only part the
+        // day's screen shows, so keep it rather than paying for a whole second
+        // run on a model that takes a minute.
+        if let short = SummaryJSON.partialValue(of: "short_summary", in: first),
+           short.isComplete {
+            Self.log.notice("salvaged the short summary from an unparseable reply")
+            return GeneratedSummary(
+                short: short.text,
+                long: SummaryJSON.partialValue(of: "long_summary", in: first)?.text ?? "",
+                promptText: prompt
+            )
+        }
+
         // One retry. A model that wandered off the format usually comes back
         // when asked more bluntly.
         let retry = prompt + "\n\n" + Self.formatReminder
         let second = try await complete(
             prompt: retry,
             in: container,
+            attempt: 2,
             onShortSummary: onShortSummary
         )
         guard let parsed = SummaryJSON.parse(second) else {
@@ -79,8 +99,10 @@ actor MLXSummaryGenerator: SummaryGenerator {
     private func complete(
         prompt: String,
         in container: ModelContainer,
+        attempt: Int,
         onShortSummary: (@Sendable (StreamedText) -> Void)?
     ) async throws -> String {
+        let log = Self.log
         let output = try await container.perform { (context: ModelContext) -> String in
             let input = try await context.processor.prepare(
                 input: UserInput(prompt: prompt)
@@ -91,12 +113,14 @@ actor MLXSummaryGenerator: SummaryGenerator {
 
             var output = ""
             var reported: StreamedText?
+            var info: GenerateCompletionInfo?
             for await generation in try MLXLMCommon.generate(
                 input: input,
                 parameters: parameters,
                 context: context
             ) {
                 if Task.isCancelled { break }
+                if let completion = generation.info { info = completion }
                 guard let chunk = generation.chunk else { continue }
                 output += chunk
 
@@ -111,6 +135,20 @@ actor MLXSummaryGenerator: SummaryGenerator {
                     reported = partial
                     onShortSummary(partial)
                 }
+            }
+
+            if let info {
+                log.notice(
+                    """
+                    attempt \(attempt, privacy: .public): \
+                    prompt \(info.promptTokenCount, privacy: .public) tokens at \
+                    \(info.promptTokensPerSecond, format: .fixed(precision: 1)) t/s, \
+                    generated \(info.generationTokenCount, privacy: .public) at \
+                    \(info.tokensPerSecond, format: .fixed(precision: 1)) t/s, \
+                    stopped on \(String(describing: info.stopReason), privacy: .public), \
+                    \(info.promptTime + info.generateTime, format: .fixed(precision: 1))s total
+                    """
+                )
             }
             return output
         }
@@ -147,8 +185,12 @@ actor MLXSummaryGenerator: SummaryGenerator {
         defer { loading = nil }
 
         do {
+            let started = Date()
             let container = try await task.value
             loaded = (model, container)
+            Self.log.notice(
+                "loaded \(model.displayName, privacy: .public) in \(Date().timeIntervalSince(started), format: .fixed(precision: 1))s"
+            )
             return container
         } catch {
             throw SummaryGenerationError.modelLoadFailed(error.localizedDescription)
