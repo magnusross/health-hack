@@ -61,21 +61,6 @@ struct SettingsView: View {
         ) { result in
             model.exportCompleted(result)
         }
-        .confirmationDialog(
-            downloadPromptTitle,
-            isPresented: Binding(
-                get: { model.pendingDownload != nil },
-                set: { if !$0 { model.pendingDownload = nil } }
-            ),
-            titleVisibility: .visible
-        ) {
-            Button("Download") {
-                Task { await model.confirmPendingDownload() }
-            }
-            Button("Not now", role: .cancel) {
-                model.pendingDownload = nil
-            }
-        }
         .task {
             await model.load()
             await model.loadModels()
@@ -138,21 +123,12 @@ struct SettingsView: View {
         }
     }
 
-    private var downloadPromptTitle: String {
-        guard let pending = model.pendingDownload else { return "" }
-        let size = ByteCountFormatter.string(
-            fromByteCount: pending.approximateDownloadBytes,
-            countStyle: .file
-        )
-        return "\(pending.displayName) is about \(size). Download it now?"
-    }
-
     @ViewBuilder
     private func modelRow(_ summaryModel: SummaryModelID) -> some View {
         let state = model.modelStates[summaryModel] ?? .notDownloaded
         let isSelected = model.selectedModel == summaryModel
 
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             Button {
                 model.chooseModel(summaryModel)
             } label: {
@@ -161,9 +137,6 @@ struct SettingsView: View {
                         Text(summaryModel.displayName)
                             .font(.system(.body, weight: isSelected ? .semibold : .regular))
                         Text(summaryModel.summary)
-                            .font(.footnote)
-                            .foregroundStyle(Color.tangentInk.opacity(0.6))
-                        Text(model.stateDescription(for: summaryModel))
                             .font(.footnote)
                             .foregroundStyle(Color.tangentInk.opacity(0.6))
                     }
@@ -179,31 +152,83 @@ struct SettingsView: View {
             }
             .buttonStyle(.plain)
 
-            if case .downloading(let fraction) = state {
-                ProgressView(value: fraction)
-                    .tint(Color.tangentPurple)
-                Button("Cancel download") {
+            modelStatus(summaryModel, state: state)
+        }
+        .padding(.vertical, 4)
+    }
+
+    /// Everything about the weights — where they are and what to do about it —
+    /// stays inside the model's own card. No sheet, no dialog.
+    @ViewBuilder
+    private func modelStatus(
+        _ summaryModel: SummaryModelID,
+        state: ModelDownloadState
+    ) -> some View {
+        switch state {
+        case .downloading(let progress):
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text(model.stateDescription(for: summaryModel))
+                        .font(.footnote)
+                        .foregroundStyle(Color.tangentInk.opacity(0.75))
+                }
+                // The bar only appears once the total is known; before that the
+                // spinner carries the "something is happening" job on its own.
+                if progress.totalBytes > 0 {
+                    ProgressView(value: progress.fraction)
+                        .tint(Color.tangentPurple)
+                }
+                modelButton("Cancel", role: nil) {
                     Task { await model.cancelDownload(summaryModel) }
                 }
-                .font(.footnote)
-                .foregroundStyle(Color.tangentPurple)
-            } else if state.isReady {
-                Button("Remove from device", role: .destructive) {
+            }
+
+        case .ready:
+            VStack(alignment: .leading, spacing: 7) {
+                statusLine(summaryModel)
+                modelButton("Remove", role: .destructive) {
                     Task { await model.deleteModel(summaryModel) }
                 }
-                .font(.footnote)
+            }
+
+        case .notDownloaded, .failed:
+            VStack(alignment: .leading, spacing: 7) {
+                statusLine(summaryModel)
+                modelButton(downloadLabel(for: summaryModel), role: nil) {
+                    Task { await model.download(summaryModel) }
+                }
             }
         }
-        .padding(.vertical, 2)
     }
-}
 
-#Preview {
-    let container = try! TangentModelContainer.make(inMemory: true)
-    NavigationStack {
-        SettingsView(
-            noteStore: SwiftDataNoteStore(modelContext: container.mainContext),
-            reminderScheduler: UnavailableReminderScheduler()
+    private func statusLine(_ summaryModel: SummaryModelID) -> some View {
+        Text(model.stateDescription(for: summaryModel))
+            .font(.footnote)
+            .foregroundStyle(Color.tangentInk.opacity(0.6))
+    }
+
+    /// The size sits on the button, so the user reads what the tap will cost
+    /// before making it.
+    private func downloadLabel(for summaryModel: SummaryModelID) -> String {
+        let size = ByteCountFormatter.string(
+            fromByteCount: summaryModel.approximateDownloadBytes,
+            countStyle: .file
         )
+        return "Download · \(size)"
+    }
+
+    private func modelButton(
+        _ title: String,
+        role: ButtonRole?,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(title, role: role, action: action)
+            .font(.system(.subheadline, weight: .medium))
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.capsule)
+            .controlSize(.small)
+            .tint(role == .destructive ? .red : Color.tangentPurple)
     }
 }

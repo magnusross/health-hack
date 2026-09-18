@@ -22,9 +22,6 @@ final class SettingsViewModel: ObservableObject {
 
     @Published private(set) var selectedModel = SummaryModelID.default
     @Published private(set) var modelStates: [SummaryModelID: ModelDownloadState] = [:]
-    /// Set when a model needs downloading, which puts the size in front of the
-    /// user before any bytes move.
-    @Published var pendingDownload: SummaryModelID?
 
     private let noteStore: any NoteStore
     private let reminderScheduler: any ReminderScheduler
@@ -142,30 +139,23 @@ final class SettingsViewModel: ObservableObject {
         }
     }
 
-    /// Choosing a model is also what downloads it, so the user never has to
-    /// find a separate action.
+    /// Choosing a model only chooses it. Downloading is its own button on the
+    /// card, labelled with the size, so a multi-gigabyte transfer never starts
+    /// from a tap that looked like a preference.
     func chooseModel(_ model: SummaryModelID) {
         guard let modelCatalog else { return }
         modelCatalog.select(model)
         selectedModel = model
-
-        let state = modelStates[model] ?? .notDownloaded
-        guard !state.isReady, !state.isDownloading else { return }
-        pendingDownload = model
-    }
-
-    func confirmPendingDownload() async {
-        guard let model = pendingDownload else { return }
-        pendingDownload = nil
-        await download(model)
     }
 
     func download(_ model: SummaryModelID) async {
         guard let modelCatalog else { return }
-        modelStates[model] = .downloading(fraction: 0)
+        modelStates[model] = .downloading(
+            DownloadProgress(completedBytes: 0, totalBytes: 0)
+        )
         do {
-            try await modelCatalog.download(model) { [weak self] fraction in
-                self?.modelStates[model] = .downloading(fraction: fraction)
+            try await modelCatalog.download(model) { [weak self] progress in
+                self?.modelStates[model] = .downloading(progress)
             }
             modelStates[model] = await modelCatalog.state(of: model)
         } catch is CancellationError {
@@ -195,14 +185,19 @@ final class SettingsViewModel: ObservableObject {
     func stateDescription(for model: SummaryModelID) -> String {
         switch modelStates[model] ?? .notDownloaded {
         case .notDownloaded:
-            "Not downloaded · \(Self.size(model.approximateDownloadBytes))"
-        case .downloading(let fraction):
-            "Downloading · \(Int(fraction * 100))%"
+            "Not on this device"
+        case .downloading(let progress):
+            Self.downloadDescription(progress)
         case .ready(let bytes):
             "On this device · \(Self.size(bytes))"
         case .failed(let message):
             message
         }
+    }
+
+    private static func downloadDescription(_ progress: DownloadProgress) -> String {
+        guard progress.totalBytes > 0 else { return "Starting download…" }
+        return "Downloading · \(size(progress.completedBytes)) of \(size(progress.totalBytes))"
     }
 
     private static func size(_ bytes: Int64) -> String {

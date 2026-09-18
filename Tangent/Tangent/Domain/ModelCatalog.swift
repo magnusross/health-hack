@@ -1,8 +1,20 @@
 import Foundation
 
+/// Byte counts rather than a bare percentage: on a multi-gigabyte download a
+/// percentage can sit on the same number for a minute, which reads as stuck.
+struct DownloadProgress: Equatable, Sendable {
+    var completedBytes: Int64
+    var totalBytes: Int64
+
+    var fraction: Double {
+        guard totalBytes > 0 else { return 0 }
+        return min(1, Double(completedBytes) / Double(totalBytes))
+    }
+}
+
 enum ModelDownloadState: Equatable, Sendable {
     case notDownloaded
-    case downloading(fraction: Double)
+    case downloading(DownloadProgress)
     case ready(bytesOnDisk: Int64)
     case failed(message: String)
 
@@ -35,7 +47,7 @@ protocol ModelCatalog: AnyObject {
     /// Downloads the weights, reporting completed fraction as it goes.
     func download(
         _ model: SummaryModelID,
-        onProgress: @escaping @MainActor (Double) -> Void
+        onProgress: @escaping @MainActor (DownloadProgress) -> Void
     ) async throws
 
     func cancelDownload(_ model: SummaryModelID)

@@ -13,7 +13,7 @@ import Tokenizers
 @MainActor
 final class MLXModelCatalog: ModelCatalog {
     private var downloads: [SummaryModelID: Task<Void, Error>] = [:]
-    private var fractions: [SummaryModelID: Double] = [:]
+    private var progresses: [SummaryModelID: DownloadProgress] = [:]
 
     var selectedModel: SummaryModelID {
         SelectedModelStore.selected
@@ -25,7 +25,9 @@ final class MLXModelCatalog: ModelCatalog {
 
     func state(of model: SummaryModelID) async -> ModelDownloadState {
         if downloads[model] != nil {
-            return .downloading(fraction: fractions[model] ?? 0)
+            return .downloading(
+                progresses[model] ?? DownloadProgress(completedBytes: 0, totalBytes: 0)
+            )
         }
         guard ModelStorage.isDownloaded(model) else {
             return .notDownloaded
@@ -35,25 +37,29 @@ final class MLXModelCatalog: ModelCatalog {
 
     func download(
         _ model: SummaryModelID,
-        onProgress: @escaping @MainActor (Double) -> Void
+        onProgress: @escaping @MainActor (DownloadProgress) -> Void
     ) async throws {
         if let existing = downloads[model] {
             return try await existing.value
         }
 
-        fractions[model] = 0
+        progresses[model] = DownloadProgress(completedBytes: 0, totalBytes: 0)
         let task = Task<Void, Error> { [weak self] in
             _ = try await resolve(
                 configuration: model.configuration,
                 from: #hubDownloader(ModelStorage.client()),
                 useLatest: false,
                 progressHandler: { progress in
-                    // Read off Progress here: it is not Sendable and must not
-                    // cross to the main actor.
-                    let fraction = progress.fractionCompleted
+                    // Read the counts off Progress here: it is not Sendable and
+                    // must not cross to the main actor. The hub weights each
+                    // file by its size, so these are bytes.
+                    let update = DownloadProgress(
+                        completedBytes: progress.completedUnitCount,
+                        totalBytes: progress.totalUnitCount
+                    )
                     Task { @MainActor in
-                        self?.fractions[model] = fraction
-                        onProgress(fraction)
+                        self?.progresses[model] = update
+                        onProgress(update)
                     }
                 }
             )
@@ -62,7 +68,7 @@ final class MLXModelCatalog: ModelCatalog {
 
         defer {
             downloads[model] = nil
-            fractions[model] = nil
+            progresses[model] = nil
         }
         try await task.value
     }
@@ -70,7 +76,7 @@ final class MLXModelCatalog: ModelCatalog {
     func cancelDownload(_ model: SummaryModelID) {
         downloads[model]?.cancel()
         downloads[model] = nil
-        fractions[model] = nil
+        progresses[model] = nil
     }
 
     /// Deleting the selected model does not change the selection. The next
