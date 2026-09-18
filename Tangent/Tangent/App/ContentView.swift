@@ -109,8 +109,8 @@ struct ContentView: View {
                 .opacity(coversRecordTransition ? 1 : 0)
                 .allowsHitTesting(coversRecordTransition)
         }
-        .animation(.easeInOut(duration: 0.45), value: coversRecordTransition)
-        .animation(.easeInOut(duration: 0.45), value: selectedTab)
+        .animation(.easeInOut(duration: 0.25), value: coversRecordTransition)
+        .animation(.easeInOut(duration: 0.25), value: selectedTab)
         .safeAreaInset(edge: .top, alignment: .leading, spacing: 0) {
             if dependencies.healthModel.isMock {
                 Text("MOCK MODEL")
@@ -129,11 +129,11 @@ struct ContentView: View {
     private func showDailySummary(for diaryID: UUID) {
         coversRecordTransition = true
         Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(280))
+            try? await Task.sleep(for: .milliseconds(140))
             recordPath = []
             diaryPath = [.freshRecording(diaryID)]
             selectedTab = .diary
-            try? await Task.sleep(for: .milliseconds(60))
+            try? await Task.sleep(for: .milliseconds(40))
             coversRecordTransition = false
         }
     }
