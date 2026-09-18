@@ -1,0 +1,348 @@
+TASK: Implement Workflow 02 — Record Tangent, Initial Idle Screen
+
+Read `rules.txt` first and follow the architecture created by `00_init_workflow.txt`.
+
+This task implements ONLY the initial "not recording" state of the Record Tangent workflow.
+
+There is currently no Record screen, so create it from scratch inside:
+
+Features/Record/
+
+Do not invent the recording-in-progress UI yet. That will be specified separately.
+
+--------------------------------------------------
+PURPOSE
+--------------------------------------------------
+
+The Record screen is where the user begins their daily voice Tangent.
+
+The initial screen should feel extremely simple, calm, and inviting.
+
+Primary visual:
+- one large animated orb/blob
+- subtle organic movement
+- very little other content
+- light neutral background
+- minimal navigation
+
+The orb should feel alive, but NOT busy or like an audio visualizer.
+
+--------------------------------------------------
+SCREEN LAYOUT
+--------------------------------------------------
+
+Use the following structure:
+
+TOP:
+- minimal Settings icon in the top-right
+
+CENTER:
+- large animated orb/blob
+- "Tap to record" text associated with the orb
+
+BOTTOM:
+persistent navigation:
+- left: Diary / book icon
+- center: Record / microphone icon
+- right: Insights / lightbulb icon
+
+The Record tab is the current/active destination.
+
+Do NOT include:
+- "View notes"
+- extra buttons
+- explanatory paragraphs
+- cards
+- titles such as "Record Tangent" unless required for accessibility
+
+The screen should remain visually sparse.
+
+--------------------------------------------------
+BACKGROUND / VISUAL STYLE
+--------------------------------------------------
+
+Use the Tangent neutral/light background from the DesignSystem.
+
+The intended visual feeling is:
+- clean
+- soft
+- minimal
+- health/wellness without looking clinical
+- simple enough to feel similar to a blank diary page
+
+Avoid:
+- strong gradients across the entire screen
+- excessive colour
+- heavy shadows
+- glassmorphism
+- dashboard styling
+
+--------------------------------------------------
+ANIMATED ORB
+--------------------------------------------------
+
+Create a large organic animated orb centered approximately in the upper-middle / middle of the screen.
+
+It should visually resemble a soft circular blob rather than a rigid perfect circle.
+
+Use Tangent colours such as:
+- Purple
+- Lilac
+- optionally a very small amount of Sky
+
+The orb can contain a soft moving gradient.
+
+IMPORTANT:
+The orb should NOT simply be a Circle with scaleEffect animation.
+
+It should have genuine subtle shape deformation.
+
+Preferred implementation:
+- custom SwiftUI Shape / Path
+- approximately 6–8 control points around the circumference
+- smooth Bézier interpolation between points
+- animate the radius offsets of those points using deterministic sine/cosine functions
+- use different low frequencies/phases for different points
+- optionally use TimelineView / Canvas if appropriate
+
+The result should:
+- remain broadly circular
+- slowly morph organically
+- have smooth edges at all times
+- never jitter
+- never produce sharp corners
+- never dramatically distort
+
+Movement should be slow and subtle.
+
+Think:
+"breathing organic blob"
+
+NOT:
+"lava lamp"
+"voice waveform"
+"jelly bouncing"
+"random noise"
+
+--------------------------------------------------
+ORB ANIMATION
+--------------------------------------------------
+
+Combine approximately three subtle effects:
+
+1. Shape morph
+   - very small continuous deformation of the perimeter
+
+2. Breathing
+   - extremely subtle scale variation
+   - slow cycle
+
+3. Internal gradient movement
+   - gradient shifts slightly over time
+   - very slow
+   - should not draw attention away from the interaction
+
+Optionally add a very soft blurred glow behind the orb.
+
+Keep all animation deterministic and smooth.
+
+Do NOT regenerate random shape points every frame.
+
+Animations should continue indefinitely without visible jumps.
+
+Respect Reduce Motion:
+- when Reduce Motion is enabled, keep the orb mostly static
+- remove or significantly reduce deformation and pulsing
+
+--------------------------------------------------
+"TAP TO RECORD"
+--------------------------------------------------
+
+When the screen first appears:
+
+Do NOT immediately show the instruction.
+
+After approximately 3 seconds:
+
+"Tap to record"
+
+should gently fade into view.
+
+Use a subtle opacity transition.
+
+Do not animate it aggressively.
+
+The user should not have to tap exactly on the text.
+
+The orb and a generous area surrounding it should form one large tappable target.
+
+--------------------------------------------------
+INTERACTION
+--------------------------------------------------
+
+Tapping the orb / "Tap to record" area represents starting a recording.
+
+For THIS task:
+
+- expose this interaction cleanly in the Record feature
+- connect it to the existing Record screen state / AudioRecorder abstraction if an appropriate implementation already exists
+- BUT do not invent or design the recording-in-progress interface
+
+If the recording workflow has not yet been implemented:
+- create a clear state transition/callback/hook for `startRecording`
+- do not create arbitrary placeholder recording UI
+- do not navigate to a fake screen
+
+The code should make it straightforward for the next workflow task to attach the real recording state.
+
+--------------------------------------------------
+SETTINGS
+--------------------------------------------------
+
+Top-right settings control should match the Home screen convention.
+
+Use the same minimal custom settings icon:
+- thin line
+- two small circles
+- extremely lightweight
+- NOT a traditional gear
+
+Tapping it navigates to:
+`04_settings`
+
+Reuse the existing shared component if Workflow 01 already implemented it.
+
+Do not duplicate the icon implementation unnecessarily.
+
+--------------------------------------------------
+BOTTOM NAVIGATION
+--------------------------------------------------
+
+Use the same bottom navigation component as Workflow 01.
+
+Exactly three items:
+
+1. Book
+   Diary
+   navigates to `01_diary_of_tangents`
+
+2. Microphone
+   Record
+   current screen
+
+3. Lightbulb
+   Insights
+   navigates to `05_insights`
+
+Reuse an existing shared navigation component if one already exists.
+
+Do NOT create a second visually different navigation implementation.
+
+Keep it:
+- simple
+- lightweight
+- mostly neutral
+- minimal colour
+
+--------------------------------------------------
+ARCHITECTURE
+--------------------------------------------------
+
+Keep this screen inside:
+
+Features/Record/
+
+Do not put feature-specific UI in the App layer.
+
+Use:
+- shared colours/components from DesignSystem
+- Domain protocols rather than directly depending on concrete services
+- existing app navigation/dependency injection architecture
+
+If `AudioRecorder` exists from initialization, depend on that abstraction rather than AVFoundation directly from the View.
+
+Do not place audio engine code inside the SwiftUI view.
+
+--------------------------------------------------
+OUT OF SCOPE
+--------------------------------------------------
+
+Do NOT implement yet:
+
+- full recording-in-progress UI
+- elapsed recording timer
+- waveform
+- audio amplitude visualization
+- pause/resume
+- stop/save flow
+- transcription
+- question prompting
+- MedGemma
+- summary generation
+- diary persistence after recording
+- microphone permission onboarding UI
+- Daily Tangent Details
+- Insights
+- notification logic
+
+Those will be specified separately.
+
+--------------------------------------------------
+ACCESSIBILITY
+--------------------------------------------------
+
+Ensure:
+- orb has a large accessible tap target
+- VoiceOver label: "Start recording"
+- settings control has an appropriate label
+- bottom navigation has meaningful labels
+- Reduce Motion is respected
+- Dynamic Type does not break the composition
+
+--------------------------------------------------
+PREVIEW / DEVELOPMENT STATES
+--------------------------------------------------
+
+Provide SwiftUI previews for at least:
+
+1. Initial appearance
+   - instruction not yet visible
+
+2. Ready state
+   - "Tap to record" visible
+
+3. Reduce Motion state if practical
+
+Do not populate previews with fake diary content that leaks into production data.
+
+--------------------------------------------------
+VERIFICATION
+--------------------------------------------------
+
+Verify:
+
+- Record screen opens correctly
+- background and layout match the minimal intended design
+- orb morphs smoothly
+- orb never visibly snaps/jitters
+- orb remains mostly circular
+- gradient animation is subtle
+- "Tap to record" fades in after ~3 seconds
+- orb and text share a generous tappable area
+- Settings navigation works
+- Diary navigation works
+- Insights navigation works
+- current Record navigation state is visually clear
+- Reduce Motion works
+- app builds successfully
+- existing Home workflow remains unchanged
+
+--------------------------------------------------
+GIT
+--------------------------------------------------
+
+Keep this work isolated from unrelated changes.
+
+Commit completed work with an appropriate message, for example:
+
+feat: add Record Tangent idle screen and animated orb
