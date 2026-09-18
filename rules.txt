@@ -1,0 +1,3 @@
+Make sure to create this app using modular folders: App, DesignSystem, Features/Record, Features/Library, Domain, Data, Services/Audio, Services/Speech. Move existing UI into Features/Record and Features/Library without changing behaviour. Add Domain protocols NoteStore, AudioRecorder, Transcriber. 
+
+Database / Backend 
