@@ -21,19 +21,22 @@ final class RecordHomeViewModel: ObservableObject {
     private var isFinishing = false
     private let initialQuestionDelay: Duration
     private let questionInterval: Duration
+    private let questionTransitionDelay: Duration
 
     init(
         audioRecorder: any AudioRecorder,
         transcriber: any Transcriber,
         noteStore: any NoteStore,
         initialQuestionDelay: Duration = .seconds(3),
-        questionInterval: Duration = .seconds(10)
+        questionInterval: Duration = .seconds(10),
+        questionTransitionDelay: Duration = .milliseconds(2200)
     ) {
         self.audioRecorder = audioRecorder
         self.transcriber = transcriber
         self.noteStore = noteStore
         self.initialQuestionDelay = initialQuestionDelay
         self.questionInterval = questionInterval
+        self.questionTransitionDelay = questionTransitionDelay
     }
 
     var isRecording: Bool { phase == .recording }
@@ -185,6 +188,9 @@ final class RecordHomeViewModel: ObservableObject {
                     DiaryQuestion(id: question.id, text: question.text)
                 )
                 try? await Task.sleep(for: questionInterval)
+                guard !Task.isCancelled, isRecording else { return }
+                currentPromptQuestion = nil
+                try? await Task.sleep(for: questionTransitionDelay)
             }
         }
     }

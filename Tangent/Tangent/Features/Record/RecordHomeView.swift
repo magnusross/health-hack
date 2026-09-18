@@ -124,7 +124,7 @@ struct RecordHomeView: View {
             if model.isRecording, let question = model.currentPromptQuestion {
                 Text(question)
                     .id(question)
-                    .font(.system(.title3, design: .serif, weight: .regular))
+                    .font(.system(.title3, weight: .regular))
                     .foregroundStyle(Color.tangentInk.opacity(0.78))
                     .multilineTextAlignment(.center)
                     .lineSpacing(5)
