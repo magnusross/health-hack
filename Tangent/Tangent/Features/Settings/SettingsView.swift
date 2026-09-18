@@ -133,14 +133,9 @@ struct SettingsView: View {
                 model.chooseModel(summaryModel)
             } label: {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(summaryModel.displayName)
-                            .font(.system(.body, weight: isSelected ? .semibold : .regular))
-                        Text(summaryModel.summary)
-                            .font(.footnote)
-                            .foregroundStyle(Color.tangentInk.opacity(0.6))
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(summaryModel.displayName)
+                        .font(.system(.body, weight: isSelected ? .semibold : .regular))
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
                     if isSelected {
                         Image(systemName: "checkmark")

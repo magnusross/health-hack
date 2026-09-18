@@ -19,15 +19,6 @@ enum SummaryModelID: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    var summary: String {
-        switch self {
-        case .gemma3_1B:
-            "Small and quick. A good choice on older devices."
-        case .medgemma4B:
-            "Trained on medical text. Slower, but writes the better summary."
-        }
-    }
-
     /// Hugging Face repository holding the 4-bit weights.
     var repoID: String {
         switch self {
