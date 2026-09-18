@@ -1,0 +1,100 @@
+import SwiftUI
+
+struct InsightsView: View {
+    @StateObject private var model: InsightsViewModel
+
+    init(noteStore: any NoteStore) {
+        _model = StateObject(
+            wrappedValue: InsightsViewModel(noteStore: noteStore)
+        )
+    }
+
+    var body: some View {
+        Group {
+            if model.isLoading && model.insights.isEmpty {
+                ProgressView()
+                    .tint(Color.tangentPurple)
+            } else if let loadError = model.loadError {
+                ContentUnavailableView(
+                    "Unable to load insights",
+                    systemImage: "exclamationmark.circle",
+                    description: Text(loadError)
+                )
+            } else if model.insights.isEmpty {
+                ContentUnavailableView(
+                    "No insights yet",
+                    systemImage: "lightbulb",
+                    description: Text(
+                        "Insights will appear as your diary grows."
+                    )
+                )
+            } else {
+                insightsList
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .foregroundStyle(Color.tangentInk)
+        .background(Color.tangentWash)
+        .navigationTitle("Insights")
+        .navigationBarTitleDisplayMode(.inline)
+        .task {
+            await model.load()
+        }
+    }
+
+    private var insightsList: some View {
+        ScrollView {
+            LazyVStack(spacing: 16) {
+                ForEach(model.insights) { insight in
+                    insightBlock(insight)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+        }
+        .refreshable {
+            await model.load()
+        }
+    }
+
+    private func insightBlock(_ insight: Insight) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(insight.text)
+                .font(.system(.body))
+                .foregroundStyle(Color.tangentInk)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text(rangeText(for: insight))
+                .font(.system(.caption))
+                .foregroundStyle(Color.tangentInk.opacity(0.55))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(18)
+        .background(Color.tangentPaper.opacity(0.82))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.tangentInk.opacity(0.06), lineWidth: 1)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private func rangeText(for insight: Insight) -> String {
+        let from = insight.generatedFrom.formatted(
+            .dateTime.day().month(.abbreviated).year()
+        )
+        let to = insight.generatedTo.formatted(
+            .dateTime.day().month(.abbreviated).year()
+        )
+        return from == to ? from : "\(from) – \(to)"
+    }
+}
+
+#Preview {
+    let container = try! TangentModelContainer.make(inMemory: true)
+    NavigationStack {
+        InsightsView(
+            noteStore: SwiftDataNoteStore(modelContext: container.mainContext)
+        )
+    }
+}
