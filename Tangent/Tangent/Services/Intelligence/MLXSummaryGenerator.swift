@@ -20,6 +20,8 @@ actor MLXSummaryGenerator: SummaryGenerator {
     /// The load in flight, if any. An actor suspends at every `await`, so
     /// without this a second caller arriving mid-load starts its own.
     private var loading: (model: SummaryModelID, task: Task<ModelContainer, Error>)?
+    /// The notes generation that is queued or running, if any.
+    private var longWork: Task<GeneratedText, Error>?
 
     /// Loads the selected model so a summary asked for moments later does not
     /// have to wait for weights to come off disk.
@@ -34,7 +36,14 @@ actor MLXSummaryGenerator: SummaryGenerator {
         profile: PatientProfile,
         onPartial: (@Sendable (String) -> Void)?
     ) async throws -> GeneratedText {
-        try await generate(
+        // The sentence is the only thing anyone is waiting for. Notes still
+        // running from an earlier entry are dropped rather than made to finish
+        // first — the model runs one job at a time, so a queued paragraph the
+        // user cannot see would sit in front of the sentence they can.
+        longWork?.cancel()
+        longWork = nil
+
+        return try await generate(
             using: .dailyShortSummary,
             transcript: transcript,
             profile: profile,
@@ -48,14 +57,22 @@ actor MLXSummaryGenerator: SummaryGenerator {
         transcript: String,
         profile: PatientProfile
     ) async throws -> GeneratedText {
-        try await generate(
-            using: .dailyLongSummary,
-            transcript: transcript,
-            profile: profile,
-            maxTokens: 500,
-            label: "long",
-            onPartial: nil
-        )
+        longWork?.cancel()
+
+        let work = Task { () throws -> GeneratedText in
+            try await self.generate(
+                using: .dailyLongSummary,
+                transcript: transcript,
+                profile: profile,
+                maxTokens: 500,
+                label: "long",
+                onPartial: nil
+            )
+        }
+        longWork = work
+        defer { if longWork == work { longWork = nil } }
+
+        return try await work.value
     }
 
     private func generate(
@@ -86,6 +103,8 @@ actor MLXSummaryGenerator: SummaryGenerator {
             label: label,
             onPartial: onPartial
         )
+
+        try Task.checkCancellation()
 
         let text = SummaryText.clean(raw)
         guard !text.isEmpty else {
