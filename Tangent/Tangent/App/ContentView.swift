@@ -50,6 +50,7 @@ struct ContentView: View {
                     }
                 }
             }
+            .toolbar { appLogoToolbarItem }
             .toolbarBackground(.hidden, for: .tabBar)
             .toolbarBackgroundVisibility(.hidden, for: .tabBar)
             .tabItem {
@@ -77,6 +78,7 @@ struct ContentView: View {
                     }
                 }
             }
+            .toolbar { appLogoToolbarItem }
             .toolbarBackground(.hidden, for: .tabBar)
             .toolbarBackgroundVisibility(.hidden, for: .tabBar)
             .tabItem {
@@ -91,6 +93,7 @@ struct ContentView: View {
                     healthModel: dependencies.healthModel
                 )
             }
+            .toolbar { appLogoToolbarItem }
             .toolbarBackground(.hidden, for: .tabBar)
             .toolbarBackgroundVisibility(.hidden, for: .tabBar)
             .tabItem {
@@ -111,19 +114,16 @@ struct ContentView: View {
         }
         .animation(.easeInOut(duration: 0.25), value: coversRecordTransition)
         .animation(.easeInOut(duration: 0.25), value: selectedTab)
-        .safeAreaInset(edge: .top, alignment: .leading, spacing: 0) {
-            HStack {
-                Image("Logo")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 25, height: 25)
-                    .accessibilityLabel("Tangent")
+    }
 
-                Spacer()
-            }
-            .padding(.leading, 16)
-            .padding(.trailing, 12)
-            .padding(.top, 6)
+    @ToolbarContentBuilder
+    private var appLogoToolbarItem: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            Image("Logo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 25, height: 25)
+                .accessibilityLabel("Tangent")
         }
     }
 
