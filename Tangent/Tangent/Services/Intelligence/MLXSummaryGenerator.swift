@@ -121,54 +121,47 @@ actor MLXSummaryGenerator: SummaryGenerator {
         label: String,
         onPartial: (@Sendable (String) -> Void)?
     ) async throws -> String {
-        let log = Self.log
-        let output = try await container.perform { (context: ModelContext) -> String in
-            let input = try await context.processor.prepare(
-                input: UserInput(prompt: prompt)
-            )
-            // Near-deterministic: this is a record of what the patient said,
-            // not a piece of writing that benefits from variety.
-            let parameters = GenerateParameters(
-                maxTokens: maxTokens,
-                temperature: 0.2
-            )
+        let input = try await container.prepare(input: UserInput(prompt: prompt))
+        // Near-deterministic: this is a record of what the patient said, not a
+        // piece of writing that benefits from variety.
+        let parameters = GenerateParameters(maxTokens: maxTokens, temperature: 0.2)
 
-            var output = ""
-            var reported = ""
-            var info: GenerateCompletionInfo?
-            for await generation in try MLXLMCommon.generate(
-                input: input,
-                parameters: parameters,
-                context: context
-            ) {
-                if Task.isCancelled { break }
-                if let completion = generation.info { info = completion }
-                guard let chunk = generation.chunk else { continue }
-                output += chunk
+        // container.generate holds the model exclusively for the prefill and
+        // releases it to decode. Consuming the stream inside container.perform
+        // instead would hold it for the whole run, which is how one summary
+        // came to block every other.
+        let stream = try await container.generate(input: input, parameters: parameters)
 
-                // Every token is part of the summary now, so it goes straight
-                // to the screen — no structure to wait for.
-                guard let onPartial else { continue }
-                let partial = SummaryText.clean(output)
-                if partial != reported {
-                    reported = partial
-                    onPartial(partial)
-                }
+        var output = ""
+        var reported = ""
+        var info: GenerateCompletionInfo?
+        for await generation in stream {
+            if Task.isCancelled { break }
+            if let completion = generation.info { info = completion }
+            guard let chunk = generation.chunk else { continue }
+            output += chunk
+
+            // Every token is part of the summary now, so it goes straight to
+            // the screen — no structure to wait for.
+            guard let onPartial else { continue }
+            let partial = SummaryText.clean(output)
+            if partial != reported {
+                reported = partial
+                onPartial(partial)
             }
+        }
 
-            if let info {
-                log.notice(
-                    """
-                    \(label, privacy: .public): prompt \(info.promptTokenCount, privacy: .public) tokens at \
-                    \(info.promptTokensPerSecond, format: .fixed(precision: 1)) t/s, \
-                    generated \(info.generationTokenCount, privacy: .public) at \
-                    \(info.tokensPerSecond, format: .fixed(precision: 1)) t/s, \
-                    stopped on \(String(describing: info.stopReason), privacy: .public), \
-                    \(info.promptTime + info.generateTime, format: .fixed(precision: 1))s
-                    """
-                )
-            }
-            return output
+        if let info {
+            Self.log.notice(
+                """
+                \(label, privacy: .public): prompt \(info.promptTokenCount, privacy: .public) tokens at \
+                \(info.promptTokensPerSecond, format: .fixed(precision: 1)) t/s, \
+                generated \(info.generationTokenCount, privacy: .public) at \
+                \(info.tokensPerSecond, format: .fixed(precision: 1)) t/s, \
+                stopped on \(String(describing: info.stopReason), privacy: .public), \
+                \(info.promptTime + info.generateTime, format: .fixed(precision: 1))s
+                """
+            )
         }
 
         try Task.checkCancellation()
