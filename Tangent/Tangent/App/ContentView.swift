@@ -112,23 +112,12 @@ struct ContentView: View {
         .animation(.easeInOut(duration: 0.25), value: coversRecordTransition)
         .animation(.easeInOut(duration: 0.25), value: selectedTab)
         .safeAreaInset(edge: .top, alignment: .leading, spacing: 0) {
-            HStack(spacing: 10) {
+            HStack {
                 Image("Logo")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 25, height: 25)
                     .accessibilityLabel("Tangent")
-
-                if dependencies.healthModel.isMock {
-                    Text("MOCK MODEL")
-                        .font(.system(.caption2, design: .monospaced, weight: .bold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 4)
-                        .background(Color.orange)
-                        .clipShape(Capsule())
-                        .accessibilityLabel("Mock language model active")
-                }
 
                 Spacer()
             }
