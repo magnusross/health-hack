@@ -22,7 +22,7 @@ Use an in-memory container for tests and previews. The app uses the default loca
 
 ## On-device summaries
 
-Summaries are written by a 4-bit Gemma 3 1B or MedGemma 4B running on the
+Summaries are written by a 4-bit Gemma 3 1B or MedGemma 1.5 4B running on the
 device's GPU through MLX. Nothing is sent anywhere; the only network traffic is
 the model download, which the user starts in Settings.
 

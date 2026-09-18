@@ -38,7 +38,7 @@ These were chosen by the project owner. Do not revisit them.
    unreleased `main` of mlx-swift-lm and would force an unpinned dependency and
    vendored C++ into the app.
 3. Model downloads are managed in Settings, and the rows are labelled with the
-   model's own name ("Gemma 3 1B", "MedGemma 4B"). Never call it "the summary
+   model's own name ("Gemma 3 1B", "MedGemma 1.5 4B"). Never call it "the summary
    model" in the UI.
 4. When the model cannot run — Simulator, not downloaded, load failure, model
    returned unparseable output — fail explicitly. Show the error and a retry
@@ -68,7 +68,7 @@ MLX (read from `../mlx-swift-examples` and its resolved checkouts):
 - `LLMRegistry.gemma3_1B_qat_4bit` exists in MLXLLM at this version
   (LLMModelFactory.swift:154) and is registered in the factory.
 - `VLMModelFactory` registers `"gemma3"` (VLMModelFactory.swift:91), which is
-  the architecture MedGemma 4B was converted under. There is no built-in
+  the architecture MedGemma 1.5 4B was converted under. There is no built-in
   MedGemma entry — build a `ModelConfiguration(id:)` by hand and load it with
   `VLMModelFactory.shared`, NOT the LLM factory. Text-only chat through a VLM
   container is fine; just attach no images.
@@ -111,7 +111,7 @@ Two options, both 4-bit:
     factory: LLMModelFactory
     ~0.8 GB. Fast. The safe choice on older hardware.
 
-  MedGemma 4B
+  MedGemma 1.5 4B
     repo: `mlx-community/medgemma-1.5-4b-it-4bit`
     factory: VLMModelFactory (custom `ModelConfiguration(id:)`)
     ~2.5 GB. Slower, better clinical summaries. This is the model the project
@@ -165,7 +165,7 @@ New files:
 
   Domain/SummaryModelID.swift
     Framework-free identity of the two models: stable raw value for
-    persistence, `displayName` ("Gemma 3 1B" / "MedGemma 4B"), `repoID`,
+    persistence, `displayName` ("Gemma 3 1B" / "MedGemma 1.5 4B"), `repoID`,
     approximate download size, and a short one-line description for Settings.
     The MLX `ModelConfiguration` mapping does NOT live here.
 
@@ -336,7 +336,7 @@ UI — SETTINGS
 
 Add one section, "Model", above the export button.
 
-- A row per model, labelled with its own name: "Gemma 3 1B" and "MedGemma 4B",
+- A row per model, labelled with its own name: "Gemma 3 1B" and "MedGemma 1.5 4B",
   each with a one-line description and its size.
 - Selecting a model makes it the one used for summaries AND starts its download
   if it is not present. Show download progress inline on the row and allow
@@ -407,7 +407,7 @@ STATE 2 — Gemma 3 1B downloaded and selected
   Record, transcribe, generate. Both summaries appear, the short one is a
   single first-person sentence, the long one a paragraph. The diary home row
   shows the short summary.
-STATE 3 — MedGemma 4B downloaded and selected
+STATE 3 — MedGemma 1.5 4B downloaded and selected
   Same, on a fresh entry. Watch memory; confirm the app is not jetsammed.
 STATE 4 — Switching models
   Switching in Settings evicts the previous model from memory and the next

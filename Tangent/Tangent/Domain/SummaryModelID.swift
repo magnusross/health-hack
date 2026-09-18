@@ -15,7 +15,7 @@ enum SummaryModelID: String, CaseIterable, Identifiable, Sendable {
     var displayName: String {
         switch self {
         case .gemma3_1B: "Gemma 3 1B"
-        case .medgemma4B: "MedGemma 4B"
+        case .medgemma4B: "MedGemma 1.5 4B"
         }
     }
 
