@@ -100,7 +100,7 @@ actor MLXSummaryGenerator: SummaryGenerator {
             prompt: prompt,
             in: container,
             maxTokens: maxTokens,
-            label: label,
+            label: "\(label) · \(model.displayName)",
             onPartial: onPartial
         )
 
