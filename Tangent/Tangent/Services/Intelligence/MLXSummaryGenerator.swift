@@ -29,12 +29,43 @@ actor MLXSummaryGenerator: SummaryGenerator {
         _ = try? await container(for: model)
     }
 
-    func generateSummary(
+    func generateShortSummary(
         transcript: String,
         profile: PatientProfile,
-        template: PromptTemplate,
-        onShortSummary: (@Sendable (StreamedText) -> Void)?
-    ) async throws -> GeneratedSummary {
+        onPartial: (@Sendable (String) -> Void)?
+    ) async throws -> GeneratedText {
+        try await generate(
+            using: .dailyShortSummary,
+            transcript: transcript,
+            profile: profile,
+            maxTokens: 120,
+            label: "short",
+            onPartial: onPartial
+        )
+    }
+
+    func generateLongSummary(
+        transcript: String,
+        profile: PatientProfile
+    ) async throws -> GeneratedText {
+        try await generate(
+            using: .dailyLongSummary,
+            transcript: transcript,
+            profile: profile,
+            maxTokens: 500,
+            label: "long",
+            onPartial: nil
+        )
+    }
+
+    private func generate(
+        using template: PromptTemplate,
+        transcript: String,
+        profile: PatientProfile,
+        maxTokens: Int,
+        label: String,
+        onPartial: (@Sendable (String) -> Void)?
+    ) async throws -> GeneratedText {
         let transcript = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !transcript.isEmpty else {
             throw SummaryGenerationError.emptyTranscript
@@ -48,59 +79,28 @@ actor MLXSummaryGenerator: SummaryGenerator {
         let container = try await container(for: model)
         let prompt = template.filled(transcript: transcript, profile: profile)
 
-        let first = try await complete(
+        let raw = try await complete(
             prompt: prompt,
             in: container,
-            attempt: 1,
-            onShortSummary: onShortSummary
+            maxTokens: maxTokens,
+            label: label,
+            onPartial: onPartial
         )
-        if let parsed = SummaryJSON.parse(first) {
-            return GeneratedSummary(
-                short: parsed.short,
-                long: parsed.long,
-                promptText: prompt
-            )
+
+        let text = SummaryText.clean(raw)
+        guard !text.isEmpty else {
+            throw SummaryGenerationError.unusableOutput
         }
 
-        // The output did not parse, but the short summary may still have been
-        // finished before the model ran out of room. That is the only part the
-        // day's screen shows, so keep it rather than paying for a whole second
-        // run on a model that takes a minute.
-        if let short = SummaryJSON.partialValue(of: "short_summary", in: first),
-           short.isComplete {
-            Self.log.notice("salvaged the short summary from an unparseable reply")
-            return GeneratedSummary(
-                short: short.text,
-                long: SummaryJSON.partialValue(of: "long_summary", in: first)?.text ?? "",
-                promptText: prompt
-            )
-        }
-
-        // One retry. A model that wandered off the format usually comes back
-        // when asked more bluntly.
-        let retry = prompt + "\n\n" + Self.formatReminder
-        let second = try await complete(
-            prompt: retry,
-            in: container,
-            attempt: 2,
-            onShortSummary: onShortSummary
-        )
-        guard let parsed = SummaryJSON.parse(second) else {
-            throw SummaryGenerationError.outputNotParseable
-        }
-
-        return GeneratedSummary(
-            short: parsed.short,
-            long: parsed.long,
-            promptText: retry
-        )
+        return GeneratedText(text: text, promptText: prompt)
     }
 
     private func complete(
         prompt: String,
         in container: ModelContainer,
-        attempt: Int,
-        onShortSummary: (@Sendable (StreamedText) -> Void)?
+        maxTokens: Int,
+        label: String,
+        onPartial: (@Sendable (String) -> Void)?
     ) async throws -> String {
         let log = Self.log
         let output = try await container.perform { (context: ModelContext) -> String in
@@ -109,10 +109,13 @@ actor MLXSummaryGenerator: SummaryGenerator {
             )
             // Near-deterministic: this is a record of what the patient said,
             // not a piece of writing that benefits from variety.
-            let parameters = GenerateParameters(maxTokens: 800, temperature: 0.2)
+            let parameters = GenerateParameters(
+                maxTokens: maxTokens,
+                temperature: 0.2
+            )
 
             var output = ""
-            var reported: StreamedText?
+            var reported = ""
             var info: GenerateCompletionInfo?
             for await generation in try MLXLMCommon.generate(
                 input: input,
@@ -124,29 +127,25 @@ actor MLXSummaryGenerator: SummaryGenerator {
                 guard let chunk = generation.chunk else { continue }
                 output += chunk
 
-                // The model writes short_summary first, so it can be shown
-                // filling in while the long one is still being generated.
-                guard let onShortSummary else { continue }
-                let partial = SummaryJSON.partialValue(
-                    of: "short_summary",
-                    in: output
-                )
-                if let partial, partial != reported {
+                // Every token is part of the summary now, so it goes straight
+                // to the screen — no structure to wait for.
+                guard let onPartial else { continue }
+                let partial = SummaryText.clean(output)
+                if partial != reported {
                     reported = partial
-                    onShortSummary(partial)
+                    onPartial(partial)
                 }
             }
 
             if let info {
                 log.notice(
                     """
-                    attempt \(attempt, privacy: .public): \
-                    prompt \(info.promptTokenCount, privacy: .public) tokens at \
+                    \(label, privacy: .public): prompt \(info.promptTokenCount, privacy: .public) tokens at \
                     \(info.promptTokensPerSecond, format: .fixed(precision: 1)) t/s, \
                     generated \(info.generationTokenCount, privacy: .public) at \
                     \(info.tokensPerSecond, format: .fixed(precision: 1)) t/s, \
                     stopped on \(String(describing: info.stopReason), privacy: .public), \
-                    \(info.promptTime + info.generateTime, format: .fixed(precision: 1))s total
+                    \(info.promptTime + info.generateTime, format: .fixed(precision: 1))s
                     """
                 )
             }
@@ -196,11 +195,4 @@ actor MLXSummaryGenerator: SummaryGenerator {
             throw SummaryGenerationError.modelLoadFailed(error.localizedDescription)
         }
     }
-
-    /// Dropped in only after the first attempt came back unparseable.
-    private static let formatReminder = """
-        Your last answer was not valid JSON. Answer again with the JSON object \
-        only — no explanation, no code fence, nothing before or after it:
-        {"short_summary": "...", "long_summary": "..."}
-        """
 }

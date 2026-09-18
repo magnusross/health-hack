@@ -261,7 +261,7 @@ struct TangentTests {
             email: "taylor@example.com"
         )
 
-        let filled = PromptTemplate.dailySummary.filled(
+        let filled = PromptTemplate.dailyShortSummary.filled(
             transcript: "  I slept badly and felt flat.  ",
             profile: profile
         )
@@ -324,8 +324,9 @@ struct TangentTests {
         try PromptSeeder.seedPrompts(in: context)
 
         let texts = try await store.prompts().map(\.text)
-        #expect(texts.count == 2)
-        #expect(texts.contains(PromptTemplate.dailySummary.text))
+        #expect(texts.count == 3)
+        #expect(texts.contains(PromptTemplate.dailyShortSummary.text))
+        #expect(texts.contains(PromptTemplate.dailyLongSummary.text))
         #expect(texts.contains(PromptTemplate.weeklyInsights.text))
     }
 
@@ -343,79 +344,28 @@ struct TangentTests {
     }
 
     @Test
-    func summaryJSONReadsBareFencedAndSurroundedOutput() {
-        let bare = #"{"short_summary": "I slept well.", "long_summary": "A steady day."}"#
-        let fenced = "```json\n" + bare + "\n```"
-        let surrounded = "Here is the summary:\n" + bare + "\nLet me know if that helps."
+    func summaryTextStripsWhatTheModelWrapsAroundASentence() {
+        let expected = "I slept badly and woke twice."
 
-        for output in [bare, fenced, surrounded] {
-            let parsed = SummaryJSON.parse(output)
-            #expect(parsed?.short == "I slept well.")
-            #expect(parsed?.long == "A steady day.")
-        }
+        #expect(SummaryText.clean(expected) == expected)
+        #expect(SummaryText.clean("  \(expected)\n\n") == expected)
+        #expect(SummaryText.clean("\"\(expected)\"") == expected)
+        #expect(SummaryText.clean("Short summary: \(expected)") == expected)
+        #expect(SummaryText.clean("short_summary: \"\(expected)\"") == expected)
+        #expect(SummaryText.clean("```\n\(expected)\n```") == expected)
     }
 
     @Test
-    func summaryJSONIgnoresBracesInsideStringsAndRejectsBadOutput() {
-        let braces = #"{"short_summary": "I wrote {notes} today.", "long_summary": "All fine."}"#
-        #expect(SummaryJSON.parse(braces)?.short == "I wrote {notes} today.")
-
-        // Truncated at the token cap, missing a key, and empty values.
-        #expect(SummaryJSON.parse(#"{"short_summary": "I slept well.", "long_su"#) == nil)
-        #expect(SummaryJSON.parse(#"{"short_summary": "I slept well."}"#) == nil)
-        #expect(SummaryJSON.parse(#"{"short_summary": "", "long_summary": "  "}"#) == nil)
-        #expect(SummaryJSON.parse("I could not write a summary.") == nil)
-    }
-
-    @Test
-    func partialShortSummaryGrowsAsTheModelWrites() {
-        let prefixes = [
-            #"{"#,
-            #"{"short_summary"#,
-            #"{"short_summary": "#,
-            #"{"short_summary": ""#,
-            #"{"short_summary": "I slept"#,
-            #"{"short_summary": "I slept badly."#,
-            #"{"short_summary": "I slept badly.", "long_summary": "I woke"#,
-        ]
-        let expected: [StreamedText?] = [
-            nil,
-            nil,
-            nil,
-            StreamedText(text: "", isComplete: false),
-            StreamedText(text: "I slept", isComplete: false),
-            StreamedText(text: "I slept badly.", isComplete: false),
-            // The closing quote arrived, so the short summary is finished even
-            // though the long one is still being written.
-            StreamedText(text: "I slept badly.", isComplete: true),
-        ]
-
-        for (prefix, value) in zip(prefixes, expected) {
-            #expect(SummaryJSON.partialValue(of: "short_summary", in: prefix) == value)
-        }
-    }
-
-    @Test
-    func partialValueHandlesEscapesArrivingOneCharacterAtATime() {
-        let complete = #"{"short_summary": "I said \"fine\" and meant it"#
+    func summaryTextLeavesAPartialSentenceAlone() {
+        // Mid-stream: the opening quote goes so the screen never shows one, and
+        // the unfinished words are left exactly as they arrived.
+        #expect(SummaryText.clean("\"I slept badly and") == "I slept badly and")
+        #expect(SummaryText.clean("I slept") == "I slept")
+        #expect(SummaryText.clean("") == "")
+        // A quotation the user actually made is not a wrapper.
         #expect(
-            SummaryJSON.partialValue(of: "short_summary", in: complete)?.text
-                == #"I said "fine" and meant it"#
-        )
-
-        // A backslash with nothing after it yet is dropped rather than shown.
-        #expect(
-            SummaryJSON.partialValue(of: "short_summary", in: #"{"short_summary": "I said \"#)?.text
-                == "I said "
-        )
-        // Half a unicode escape is dropped too.
-        #expect(
-            SummaryJSON.partialValue(of: "short_summary", in: #"{"short_summary": "caf\u00"#)?.text
-                == "caf"
-        )
-        #expect(
-            SummaryJSON.partialValue(of: "short_summary", in: #"{"short_summary": "caf\u00e9."#)?.text
-                == "café."
+            SummaryText.clean("I told them \"I am fine\" and left.")
+                == "I told them \"I am fine\" and left."
         )
     }
 

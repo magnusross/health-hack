@@ -1,34 +1,22 @@
 import Foundation
 
-/// The two summaries a model writes for one diary entry, plus the prompt that
-/// produced them. `promptText` is what `DIARY.prompt_text` persists.
-struct GeneratedSummary: Equatable, Sendable {
-    var short: String
-    var long: String
+/// Text a model wrote, with the filled prompt that produced it. The prompt is
+/// what `DIARY.prompt_text` persists.
+struct GeneratedText: Equatable, Sendable {
+    var text: String
     var promptText: String
 
-    init(short: String, long: String, promptText: String) {
-        self.short = short
-        self.long = long
+    init(text: String, promptText: String) {
+        self.text = text
         self.promptText = promptText
     }
 }
 
-/// A value the model is still writing.
-struct StreamedText: Equatable, Sendable {
-    var text: String
-    /// True once the model has closed the value. The long summary keeps
-    /// generating after this, so the screen has to stop claiming the short one
-    /// is still being written.
-    var isComplete: Bool
-
-    init(text: String, isComplete: Bool) {
-        self.text = text
-        self.isComplete = isComplete
-    }
-}
-
-/// Turns a transcript into a diary summary on device.
+/// Turns a transcript into diary summaries on device.
+///
+/// The two summaries are separate calls rather than one structured reply. The
+/// short one is all the user waits for, so it is asked for on its own and comes
+/// back in seconds; the long one is for insights and finishes in its own time.
 ///
 /// Implementations must be safe to call off the main actor, must not hold any
 /// state between calls, and must honour task cancellation.
@@ -40,30 +28,18 @@ protocol SummaryGenerator: AnyObject, Sendable {
     /// silent and surfaces later, when a summary is actually asked for.
     func prepare() async
 
-    /// - Parameter onShortSummary: the short summary as it is written, so the
-    ///   screen can show it filling in. The long summary follows it and keeps
-    ///   generating after this reports itself complete.
-    func generateSummary(
+    /// - Parameter onPartial: the sentence as it is written, so the screen can
+    ///   show it filling in.
+    func generateShortSummary(
         transcript: String,
         profile: PatientProfile,
-        template: PromptTemplate,
-        onShortSummary: (@Sendable (StreamedText) -> Void)?
-    ) async throws -> GeneratedSummary
-}
+        onPartial: (@Sendable (String) -> Void)?
+    ) async throws -> GeneratedText
 
-extension SummaryGenerator {
-    func generateSummary(
+    func generateLongSummary(
         transcript: String,
-        profile: PatientProfile,
-        template: PromptTemplate = .dailySummary
-    ) async throws -> GeneratedSummary {
-        try await generateSummary(
-            transcript: transcript,
-            profile: profile,
-            template: template,
-            onShortSummary: nil
-        )
-    }
+        profile: PatientProfile
+    ) async throws -> GeneratedText
 }
 
 enum SummaryGenerationError: LocalizedError, Equatable {
@@ -71,8 +47,8 @@ enum SummaryGenerationError: LocalizedError, Equatable {
     case unsupportedDevice
     case modelNotDownloaded(SummaryModelID)
     case modelLoadFailed(String)
-    /// The model answered, but not with usable JSON, twice.
-    case outputNotParseable
+    /// The model answered with nothing usable.
+    case unusableOutput
     case emptyTranscript
     case cancelled
 
@@ -84,7 +60,7 @@ enum SummaryGenerationError: LocalizedError, Equatable {
             "\(model.displayName) has not been downloaded yet."
         case .modelLoadFailed(let reason):
             "The model could not be loaded. \(reason)"
-        case .outputNotParseable:
+        case .unusableOutput:
             "The model did not return a usable summary."
         case .emptyTranscript:
             "There is nothing to summarise yet."

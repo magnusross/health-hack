@@ -6,12 +6,18 @@ import Foundation
 final class UnavailableSummaryGenerator: SummaryGenerator {
     func prepare() async {}
 
-    func generateSummary(
+    func generateShortSummary(
         transcript: String,
         profile: PatientProfile,
-        template: PromptTemplate,
-        onShortSummary: (@Sendable (StreamedText) -> Void)?
-    ) async throws -> GeneratedSummary {
+        onPartial: (@Sendable (String) -> Void)?
+    ) async throws -> GeneratedText {
+        throw SummaryGenerationError.unsupportedDevice
+    }
+
+    func generateLongSummary(
+        transcript: String,
+        profile: PatientProfile
+    ) async throws -> GeneratedText {
         throw SummaryGenerationError.unsupportedDevice
     }
 }

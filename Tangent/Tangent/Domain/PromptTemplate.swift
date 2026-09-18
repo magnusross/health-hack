@@ -38,20 +38,38 @@ struct PromptTemplate: Equatable, Sendable {
 }
 
 extension PromptTemplate {
-    static let dailySummary = PromptTemplate(
+    /// The sentence the user reads. Kept separate from the long summary so it
+    /// arrives on screen in seconds rather than after a paragraph the user
+    /// never sees.
+    static let dailyShortSummary = PromptTemplate(
         text: """
         You are a helpful medical assistant. You are summarising one entry in a private
-        voice diary. Read the transcript at the end and return two things.
+        voice diary. Read the transcript at the end and write one sentence.
 
-        SHORT_SUMMARY
-        One sentence, written as if the user wrote it: first person, "I" and "my".
+        Write it as if the user wrote it: first person, "I" and "my".
         Examples of the style only, taken from other people's diaries. Never take a
         symptom, an activity or any other detail from them:
         "I slept more deeply and woke up feeling refreshed."
         "A mild headache appeared after lunch but eased by evening."
         "My energy dipped in the afternoon, so I took a short walk."
 
-        LONG_SUMMARY
+        Return only that sentence and nothing else.
+
+        Use the profile below to judge what to foreground. Do not treat anything in it
+        as something said in this entry.
+
+        USER PROFILE: {user_profile}
+
+        TRANSCRIPT: {transcript}
+        """
+    )
+
+    /// The clinical record. Never shown per day; insights read it across days.
+    static let dailyLongSummary = PromptTemplate(
+        text: """
+        You are a helpful medical assistant. You are summarising one entry in a private
+        voice diary. Read the transcript at the end and write the notes for the record.
+
         Each sentence should be a single fact from the transcript. It should be in passive voice. 
         Always refer to the user. Here is an example. 
 
@@ -66,13 +84,12 @@ extension PromptTemplate {
         for the loo. My dad had a knee replacement, so I don't know. Oh, and I've been
         getting headaches in the afternoon, I think. Right, better go, bye."
 
-        Example long_summary:
+        Example notes:
         "User reports left knee pain, 5/10, worse on stairs, 2 weeks. Cycled to work,
         25 min each way. Rushed lunch, sausage roll only. Slept 7 h, woke once for
         toilet. Afternoon headaches, unsure."
 
-        Return only this JSON and nothing else:
-        {"short_summary": "...", "long_summary": "..."}
+        Return only the notes and nothing else.
 
         Use the profile below to judge what to foreground. Do not treat anything in it
         as something said in this entry.

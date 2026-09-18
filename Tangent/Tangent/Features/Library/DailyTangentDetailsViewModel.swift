@@ -30,9 +30,8 @@ final class DailyTangentDetailsViewModel: ObservableObject {
     @Published private(set) var isTranscribing = false
     // Read through `summaryDisplay`; the raw state is the view model's own.
     @Published private var summaryState: SummaryState = .pending
-    /// The short summary as the model writes it, until the saved entry takes
-    /// over.
-    @Published private var streamingShortSummary: StreamedText?
+    /// The sentence as the model writes it, until the saved entry takes over.
+    @Published private var streamingShortSummary = ""
     @Published private(set) var loadError: String?
 
     private let noteStore: any NoteStore
@@ -40,6 +39,9 @@ final class DailyTangentDetailsViewModel: ObservableObject {
     private let summaryGenerator: (any SummaryGenerator)?
     private let diaryID: UUID
     let streamsTranscript: Bool
+    /// Unstructured on purpose: the user only waits for the sentence, so the
+    /// notes for the record keep generating after they have left the screen.
+    private var longSummaryTask: Task<Void, Never>?
 
     init(
         noteStore: any NoteStore,
@@ -69,17 +71,9 @@ final class DailyTangentDetailsViewModel: ObservableObject {
             return .failed(message: message, needsModel: needsModel)
 
         case .generating:
-            guard let streaming = streamingShortSummary,
-                  !streaming.text.isEmpty
-            else {
-                return .nothingYet
-            }
-            // The model closes the short summary long before it finishes the
-            // long one. Once it has, this is finished text, not a work in
-            // progress, and saying otherwise is what made it look stuck.
-            return streaming.isComplete
-                ? .written(streaming.text)
-                : .writing(streaming.text)
+            return streamingShortSummary.isEmpty
+                ? .nothingYet
+                : .writing(streamingShortSummary)
 
         case .settled:
             let saved = entry?.summaryShort ?? ""
@@ -116,7 +110,12 @@ final class DailyTangentDetailsViewModel: ObservableObject {
     /// Runs the model again for an entry that failed, or was recorded before a
     /// model was available.
     func regenerate() async {
-        await generateSummary()
+        guard let transcript = usableTranscript,
+              let profile = try? await noteStore.patientProfiles().first
+        else {
+            return
+        }
+        await generateSummary(profile: profile, transcript: transcript)
     }
 
     nonisolated static func loadTranscript(at path: String) -> String? {
@@ -198,42 +197,32 @@ final class DailyTangentDetailsViewModel: ObservableObject {
     }
 
     private func generateSummaryIfNeeded() async {
-        guard !hasSummary, !isGenerating else { return }
-        await generateSummary()
-    }
-
-    private func generateSummary() async {
-        guard let summaryGenerator,
-              let entry,
-              let transcript,
-              !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        guard !isGenerating,
+              let transcript = usableTranscript,
+              let profile = try? await noteStore.patientProfiles().first
         else {
             return
         }
 
-        let profile: PatientProfile?
-        do {
-            profile = try await noteStore.patientProfiles().first
-        } catch {
-            summaryState = .failed(message: error.localizedDescription, needsModel: false)
+        if hasSummary {
+            // The sentence is already written; make sure the notes behind it
+            // are too, so insights are not reading a gap.
+            startLongSummary(profile: profile, transcript: transcript)
             return
         }
-        guard let profile else {
-            summaryState = .failed(
-                message: "Your profile is needed to write a summary.",
-                needsModel: false
-            )
-            return
-        }
+        await generateSummary(profile: profile, transcript: transcript)
+    }
 
-        streamingShortSummary = nil
+    private func generateSummary(profile: PatientProfile, transcript: String) async {
+        guard let summaryGenerator, let entry else { return }
+
+        streamingShortSummary = ""
         summaryState = .generating
         do {
-            let generated = try await summaryGenerator.generateSummary(
+            let short = try await summaryGenerator.generateShortSummary(
                 transcript: transcript,
                 profile: profile,
-                template: .dailySummary,
-                onShortSummary: { [weak self] partial in
+                onPartial: { [weak self] partial in
                     Task { @MainActor in
                         guard let self, self.isGenerating else { return }
                         self.streamingShortSummary = partial
@@ -242,19 +231,58 @@ final class DailyTangentDetailsViewModel: ObservableObject {
             )
 
             var updated = entry
-            updated.summaryShort = generated.short
-            updated.summaryLong = generated.long
-            updated.promptText = generated.promptText
+            updated.summaryShort = short.text
+            updated.promptText = short.promptText
             try await noteStore.saveDiaryEntry(updated)
             self.entry = updated
-            streamingShortSummary = nil
+            streamingShortSummary = ""
             summaryState = .settled
+
+            startLongSummary(profile: profile, transcript: transcript)
         } catch {
             summaryState = .failed(
                 message: error.localizedDescription,
                 needsModel: Self.needsModel(error)
             )
         }
+    }
+
+    private func startLongSummary(profile: PatientProfile, transcript: String) {
+        guard let summaryGenerator,
+              let entry,
+              entry.summaryLong.isEmpty,
+              longSummaryTask == nil
+        else {
+            return
+        }
+
+        longSummaryTask = Task {
+            defer { longSummaryTask = nil }
+            do {
+                let long = try await summaryGenerator.generateLongSummary(
+                    transcript: transcript,
+                    profile: profile
+                )
+                guard var updated = try await noteStore.diaryEntry(id: diaryID) else {
+                    return
+                }
+                updated.summaryLong = long.text
+                try await noteStore.saveDiaryEntry(updated)
+                self.entry = updated
+            } catch {
+                // Nothing on screen depends on these notes, and insights can
+                // ask for them again later.
+            }
+        }
+    }
+
+    private var usableTranscript: String? {
+        guard let transcript,
+              !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else {
+            return nil
+        }
+        return transcript
     }
 
     private static func needsModel(_ error: Error) -> Bool {

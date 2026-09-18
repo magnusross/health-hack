@@ -9,7 +9,11 @@ import SwiftData
 enum PromptSeeder {
     @MainActor
     static func seedPrompts(in modelContext: ModelContext) throws {
-        let templates = [PromptTemplate.dailySummary, PromptTemplate.weeklyInsights]
+        let templates = [
+            PromptTemplate.dailyShortSummary,
+            PromptTemplate.dailyLongSummary,
+            PromptTemplate.weeklyInsights,
+        ]
         let existing = try modelContext.fetch(FetchDescriptor<PromptRecord>())
         var didInsert = false
 
