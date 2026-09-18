@@ -12,6 +12,7 @@ final class RecordHomeViewModel: ObservableObject {
     @Published private(set) var elapsed: TimeInterval = 0
     @Published private(set) var currentPromptQuestion: String?
     @Published private(set) var promptedQuestions: [DiaryQuestion] = []
+    @Published private(set) var questionSuggestionsEnabled = true
 
     private let audioRecorder: any AudioRecorder
     private let transcriber: any Transcriber
@@ -49,7 +50,7 @@ final class RecordHomeViewModel: ObservableObject {
         return String(format: "%d:%02d", minutes, seconds)
     }
 
-    func startRecording() async {
+    func startRecording(suggestQuestions: Bool = true) async {
         guard !isBusy else { return }
         switch phase {
         case .idle, .failed:
@@ -63,9 +64,12 @@ final class RecordHomeViewModel: ObservableObject {
             elapsed = 0
             promptedQuestions = []
             currentPromptQuestion = nil
+            questionSuggestionsEnabled = suggestQuestions
             phase = .recording
             startElapsedTimer()
-            await startQuestionStream()
+            if questionSuggestionsEnabled {
+                await startQuestionStream()
+            }
         } catch {
             phase = .failed(message: error.localizedDescription)
         }
@@ -97,6 +101,17 @@ final class RecordHomeViewModel: ObservableObject {
     deinit {
         elapsedTask?.cancel()
         questionTask?.cancel()
+    }
+
+    func setQuestionSuggestionsEnabled(_ enabled: Bool) async {
+        questionSuggestionsEnabled = enabled
+        guard isRecording else { return }
+
+        if enabled {
+            await startQuestionStream()
+        } else {
+            stopQuestionStream()
+        }
     }
 
     private func saveTodayEntry(
@@ -184,9 +199,11 @@ final class RecordHomeViewModel: ObservableObject {
             for question in shuffledQuestions {
                 guard !Task.isCancelled, isRecording else { return }
                 currentPromptQuestion = question.text
-                promptedQuestions.append(
-                    DiaryQuestion(id: question.id, text: question.text)
-                )
+                if !promptedQuestions.contains(where: { $0.id == question.id }) {
+                    promptedQuestions.append(
+                        DiaryQuestion(id: question.id, text: question.text)
+                    )
+                }
                 try? await Task.sleep(for: questionInterval)
                 guard !Task.isCancelled, isRecording else { return }
                 currentPromptQuestion = nil

@@ -17,6 +17,7 @@ struct RecordHomeView: View {
     private let isActive: Bool
 
     @State private var showsInstruction = false
+    @AppStorage("suggestQuestionsEnabled") private var suggestQuestionsEnabled = true
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
 
     init(
@@ -77,11 +78,27 @@ struct RecordHomeView: View {
             }
         }
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                if model.isRecording {
+                    Toggle("Suggest questions", isOn: $suggestQuestionsEnabled)
+                        .font(.system(.caption))
+                        .onChange(of: suggestQuestionsEnabled) { _, enabled in
+                            Task {
+                                await model.setQuestionSuggestionsEnabled(enabled)
+                            }
+                        }
+                        .transition(.opacity)
+                }
+            }
+
             ToolbarItem(placement: .topBarTrailing) {
                 SettingsToolbarButton(action: openSettings)
             }
         }
         .task(id: isActive) {
+            await model.setQuestionSuggestionsEnabled(
+                suggestQuestionsEnabled
+            )
             guard isActive else {
                 showsInstruction = false
                 return
@@ -106,17 +123,11 @@ struct RecordHomeView: View {
         }
         .padding(24)
         .contentShape(Rectangle())
-        .onTapGesture {
-            guard !model.isBusy else { return }
-            Task { await model.startRecording() }
-        }
+        .onTapGesture(perform: startRecordingIfIdle)
         .accessibilityElement(children: .ignore)
         .accessibilityAddTraits(model.isRecording ? [] : .isButton)
         .accessibilityLabel(orbAccessibilityLabel)
-        .accessibilityAction {
-            guard !model.isBusy else { return }
-            Task { await model.startRecording() }
-        }
+        .accessibilityAction(startRecordingIfIdle)
     }
 
     private var promptingQuestion: some View {
@@ -176,21 +187,38 @@ struct RecordHomeView: View {
 
     private var statusBelowOrb: some View {
         ZStack {
-            Text("Tap to record")
-                .font(.body.weight(.medium))
-                .opacity(showsTapToRecord ? 1 : 0)
-                .accessibilityHidden(!showsTapToRecord)
+            Button(action: startRecordingIfIdle) {
+                Text("Tap to record")
+                    .font(.body.weight(.medium))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .opacity(showsTapToRecord ? 1 : 0)
+            .allowsHitTesting(showsTapToRecord)
+            .accessibilityHidden(!showsTapToRecord)
+            .accessibilityLabel("Tap to record")
 
             Text("Recording · \(model.formattedElapsed)")
                 .font(.body.monospacedDigit())
                 .opacity(model.isRecording ? 1 : 0)
+                .allowsHitTesting(false)
                 .accessibilityHidden(!model.isRecording)
                 .accessibilityLabel("Recording, \(model.formattedElapsed)")
         }
         .foregroundStyle(Color.tangentInk.opacity(0.72))
-        .allowsHitTesting(false)
         .animation(chromeAnimation, value: showsTapToRecord)
         .animation(chromeAnimation, value: model.isRecording)
+    }
+
+    private func startRecordingIfIdle() {
+        guard !model.isBusy else { return }
+        Task {
+            await model.startRecording(
+                suggestQuestions: suggestQuestionsEnabled
+            )
+        }
     }
 
     private var orbAccessibilityLabel: String {
