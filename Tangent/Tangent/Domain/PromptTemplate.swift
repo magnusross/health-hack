@@ -44,16 +44,14 @@ extension PromptTemplate {
     static let dailyShortSummary = PromptTemplate(
         text: """
         You are a helpful medical assistant. You are summarising one entry in a private
-        voice diary. Read the transcript at the end and write one sentence.
+        voice diary.
 
-        Write it as if the user wrote it: first person, "I" and "my".
+        One sentence, written as if the user wrote it: first person, "I" and "my".
         Examples of the style only, taken from other people's diaries. Never take a
         symptom, an activity or any other detail from them:
         "I slept more deeply and woke up feeling refreshed."
         "A mild headache appeared after lunch but eased by evening."
         "My energy dipped in the afternoon, so I took a short walk."
-
-        Return only that sentence and nothing else.
 
         Use the profile below to judge what to foreground. Do not treat anything in it
         as something said in this entry.
@@ -68,28 +66,10 @@ extension PromptTemplate {
     static let dailyLongSummary = PromptTemplate(
         text: """
         You are a helpful medical assistant. You are summarising one entry in a private
-        voice diary. Read the transcript at the end and write the notes for the record.
+        voice diary.
 
         Each sentence should be a single fact from the transcript. It should be in passive voice. 
-        Always refer to the user. Here is an example. 
-
-        The example is from someone else's diary. Never take a symptom, a number or any
-        other detail from it.
-
-        Example transcript:
-        "Hi, um, so today. Knee's been playing up again, the left one, worse going
-        down the stairs, maybe a five out of ten? It's been about two weeks now. I
-        still did my cycle to work, twenty-five minutes each way. Lunch was just a
-        sausage roll, I didn't have time. Slept okay, about seven hours, woke once
-        for the loo. My dad had a knee replacement, so I don't know. Oh, and I've been
-        getting headaches in the afternoon, I think. Right, better go, bye."
-
-        Example notes:
-        "User reports left knee pain, 5/10, worse on stairs, 2 weeks. Cycled to work,
-        25 min each way. Rushed lunch, sausage roll only. Slept 7 h, woke once for
-        toilet. Afternoon headaches, unsure."
-
-        Return only the notes and nothing else.
+        Always refer to the user.
 
         Use the profile below to judge what to foreground. Do not treat anything in it
         as something said in this entry.
