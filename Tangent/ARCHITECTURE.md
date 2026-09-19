@@ -20,32 +20,36 @@ Features depend on domain models and protocols. `Data` and `Services` implement 
 
 Use an in-memory container for tests and previews. The app uses the default local SwiftData store; no data leaves the device.
 
-## On-device summaries
+## On-device generation
 
-Summaries are written by a 4-bit Gemma 3 1B or MedGemma 1.5 4B running on the
-device's GPU through MLX. Nothing is sent anywhere; the only network traffic is
-the model download, which the user starts in Settings.
+`HealthLanguageModel` and `ModelCatalog` are domain protocols. Features use
+these protocols; only `Services/Intelligence` imports MLX. `App` injects
+`MLXHealthLanguageModel` on devices and `UnavailableHealthLanguageModel` on the
+simulator. The simulator can exercise diary workflows without model inference.
 
-`SummaryGenerator` and `ModelCatalog` are domain protocols, so features talk
-about models without importing MLX. `SummaryModelID` names the two models,
-`SummaryPromptTemplate` holds the prompt and fills its `{transcript}` and
-`{user_profile}` placeholders, and `GeneratedSummary` carries the two summaries
-plus the filled prompt that `DIARY.prompt_text` persists.
+Recording saves an entry, then `DailyTangentDetailsViewModel` transcribes the
+recording and requests one short summary. It stores the sentence and its filled
+prompt, and reuses the saved summary when the entry is reopened. There is no
+background second generation task. Transcripts remain available in daily details.
 
-`MLXSummaryGenerator` is an actor holding at most one loaded model — the two
-together would exhaust memory on iOS. The model is asked for JSON, and
-`SummaryJSON` pulls the object out of a noisy completion; one retry follows an
-unparseable answer, after which generation fails explicitly rather than
-inventing a summary. `MLXModelCatalog` downloads weights into Application
-Support (not Caches, which iOS may purge) and remembers the chosen model.
+`InsightsViewModel` filters entries by the selected date range and converts
+nonempty short summaries to `DiarySummary` values. The language-model service
+receives only dates and summary text. `PromptTemplate` orders these by date
+and builds the insights prompt; neither transcripts nor patient profiles are
+inputs to insight generation. Entries without summaries are skipped.
 
-MLX needs a Metal GPU, so on the Simulator `TangentApp` injects
-`UnavailableSummaryGenerator` and summaries fail with a clear message.
+`MLXHealthLanguageModel` holds one loaded model. `MLXModelCatalog` downloads
+weights to Application Support when requested in Settings. Diary content and
+inference stay on the device; network access is used to download model weights.
 
-Generation runs on the daily details screen, after transcription, in
-`DailyTangentDetailsViewModel`. A diary entry is saved when the recording stops
-with its summaries empty; they are filled in once the model has written them.
+The current diary schema stores `summaryShort` only. SwiftData's automatic
+migration removes the obsolete attribute from existing stores; an on-disk test
+verifies this without deleting diary entries. `PromptSeeder` also removes the
+retired built-in template while preserving custom prompts.
 
 ## Adding workflows
 
-Inject `NoteStore`, `AudioRecorder`, `Transcriber`, and `HealthLanguageModel` from `AppDependencies`. The app currently injects `MockHealthLanguageModel`, which keeps Simulator development independent of MLX and exposes its mock state to the UI. A future MLX implementation should be the only type that imports MLX and can replace the mock in `TangentApp` when model files are available. New workflows should add domain operations when needed and use protocols rather than importing SwiftData into feature code.
+Keep persistence models and `ModelContext` in `Data`. Inject domain protocols
+through `AppDependencies`; views and view models must not import SwiftData or
+MLX to implement a workflow. Add tests for persistence changes and feature
+behaviour in the existing test targets.

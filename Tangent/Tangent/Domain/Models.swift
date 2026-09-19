@@ -80,7 +80,6 @@ struct DiaryEntry: Identifiable, Equatable, Sendable {
     var questions: [DiaryQuestion]
     var promptText: String
     var summaryShort: String
-    var summaryLong: String
     var transcriptPath: String
 
     init(
@@ -90,7 +89,6 @@ struct DiaryEntry: Identifiable, Equatable, Sendable {
         questions: [DiaryQuestion] = [],
         promptText: String,
         summaryShort: String = "",
-        summaryLong: String = "",
         transcriptPath: String = ""
     ) {
         self.id = id
@@ -99,8 +97,20 @@ struct DiaryEntry: Identifiable, Equatable, Sendable {
         self.questions = questions
         self.promptText = promptText
         self.summaryShort = summaryShort
-        self.summaryLong = summaryLong
         self.transcriptPath = transcriptPath
+    }
+}
+
+/// The only diary content available to insight generation.
+struct DiarySummary: Equatable, Sendable {
+    let day: Date
+    let text: String
+
+    init?(entry: DiaryEntry) {
+        let text = entry.summaryShort.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return nil }
+        self.day = entry.day
+        self.text = text
     }
 }
 

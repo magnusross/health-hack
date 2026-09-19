@@ -23,7 +23,6 @@ enum DiaryXMLExporter {
             lines.append("    </questions>")
             lines.append("    <prompt-text>\(escaped(entry.promptText))</prompt-text>")
             lines.append("    <summary-short>\(escaped(entry.summaryShort))</summary-short>")
-            lines.append("    <summary-long>\(escaped(entry.summaryLong))</summary-long>")
             lines.append("    <transcript-path>\(escaped(entry.transcriptPath))</transcript-path>")
             lines.append("  </entry>")
         }

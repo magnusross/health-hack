@@ -14,13 +14,8 @@ struct GeneratedText: Equatable, Sendable {
 
 /// Everything Tangent asks a language model for, all of it on device.
 ///
-/// The two daily summaries are separate calls rather than one structured
-/// reply. The short one is all the user waits for, so it is asked for on its
-/// own and comes back in seconds; the long one is for insights and finishes in
-/// its own time.
-///
-/// Implementations must be safe to call off the main actor, must not hold any
-/// state between calls, and must honour task cancellation.
+/// Generates one short summary per entry and insights from saved short summaries.
+/// Implementations must be safe to call off the main actor and honour cancellation.
 protocol HealthLanguageModel: AnyObject, Sendable {
     /// Loads the selected model into memory if its weights are on disk.
     ///
@@ -37,18 +32,9 @@ protocol HealthLanguageModel: AnyObject, Sendable {
         onPartial: (@Sendable (String) -> Void)?
     ) async throws -> GeneratedText
 
-    func generateLongSummary(
-        transcript: String,
-        profile: PatientProfile
-    ) async throws -> GeneratedText
-
-    /// Reads across days. `period` names the range back to the reader, e.g.
-    /// "7 to 13 September".
-    ///
-    /// - Parameter onPartial: the insights as they are written, so the screen
-    ///   fills in rather than waiting behind a spinner.
+    /// Receives dates and short summaries only, with no transcript or profile access.
     func generateInsights(
-        from entries: [DiaryEntry],
+        from summaries: [DiarySummary],
         period: String,
         onPartial: (@Sendable (String) -> Void)?
     ) async throws -> GeneratedText
@@ -78,7 +64,7 @@ enum HealthLanguageModelError: LocalizedError, Equatable {
         case .emptyTranscript:
             "There is nothing to summarise yet."
         case .notEnoughEntries:
-            "There are no Tangents in this range to look back over."
+            "There are no summaries in this range to look back over."
         case .cancelled:
             "Summary generation was cancelled."
         }

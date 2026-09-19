@@ -63,7 +63,6 @@ enum DemoDataSeeder {
                     ],
                     promptText: Self.demoPrompt,
                     summaryShort: example.summary,
-                    summaryLong: example.summary,
                     transcriptPath: try demoTranscriptPath(
                         daysAgo: example.daysAgo,
                         summary: example.summary

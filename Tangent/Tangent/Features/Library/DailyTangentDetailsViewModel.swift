@@ -39,9 +39,6 @@ final class DailyTangentDetailsViewModel: ObservableObject {
     private let healthModel: (any HealthLanguageModel)?
     private let diaryID: UUID
     let streamsTranscript: Bool
-    /// Unstructured on purpose: the user only waits for the sentence, so the
-    /// notes for the record keep generating after they have left the screen.
-    private var longSummaryTask: Task<Void, Never>?
 
     init(
         noteStore: any NoteStore,
@@ -81,8 +78,6 @@ final class DailyTangentDetailsViewModel: ObservableObject {
         }
     }
 
-    /// The long summary is written and stored for insights, but the day's
-    /// screen shows only the short one.
     var hasSummary: Bool {
         guard let entry else { return false }
         return !entry.summaryShort.isEmpty
@@ -180,8 +175,8 @@ final class DailyTangentDetailsViewModel: ObservableObject {
         transcript = fullText
     }
 
-    /// Stores the transcript and points the entry at it. The summaries stay
-    /// empty until the model has written them.
+    /// Stores the transcript and points the entry at it. The summary stays
+    /// empty until the model has written it.
     private func persist(_ transcript: String) async throws {
         guard var entry else { return }
         let audioPath = entry.transcriptPath
@@ -205,12 +200,7 @@ final class DailyTangentDetailsViewModel: ObservableObject {
             return
         }
 
-        if hasSummary {
-            // The sentence is already written; make sure the notes behind it
-            // are too, so insights are not reading a gap.
-            startLongSummary(profile: profile, transcript: transcript)
-            return
-        }
+        guard !hasSummary else { return }
         await generateSummary(profile: profile, transcript: transcript)
     }
 
@@ -238,42 +228,11 @@ final class DailyTangentDetailsViewModel: ObservableObject {
             self.entry = updated
             streamingShortSummary = ""
             summaryState = .settled
-
-            startLongSummary(profile: profile, transcript: transcript)
         } catch {
             summaryState = .failed(
                 message: error.localizedDescription,
                 needsModel: Self.needsModel(error)
             )
-        }
-    }
-
-    private func startLongSummary(profile: PatientProfile, transcript: String) {
-        guard let healthModel,
-              let entry,
-              entry.summaryLong.isEmpty,
-              longSummaryTask == nil
-        else {
-            return
-        }
-
-        longSummaryTask = Task {
-            defer { longSummaryTask = nil }
-            do {
-                let long = try await healthModel.generateLongSummary(
-                    transcript: transcript,
-                    profile: profile
-                )
-                guard var updated = try await noteStore.diaryEntry(id: diaryID) else {
-                    return
-                }
-                updated.summaryLong = long.text
-                try await noteStore.saveDiaryEntry(updated)
-                self.entry = updated
-            } catch {
-                // Nothing on screen depends on these notes, and insights can
-                // ask for them again later.
-            }
         }
     }
 

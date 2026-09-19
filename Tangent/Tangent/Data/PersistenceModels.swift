@@ -125,7 +125,6 @@ final class DiaryEntryRecord {
     var questions: [DiaryQuestion]
     var promptText: String
     var summaryShort: String
-    var summaryLong: String
     var transcriptPath: String
 
     init(entry: DiaryEntry) {
@@ -135,7 +134,6 @@ final class DiaryEntryRecord {
         questions = entry.questions
         promptText = entry.promptText
         summaryShort = entry.summaryShort
-        summaryLong = entry.summaryLong
         transcriptPath = entry.transcriptPath
     }
 
@@ -145,7 +143,6 @@ final class DiaryEntryRecord {
         questions = entry.questions
         promptText = entry.promptText
         summaryShort = entry.summaryShort
-        summaryLong = entry.summaryLong
         transcriptPath = entry.transcriptPath
     }
 
@@ -157,7 +154,6 @@ final class DiaryEntryRecord {
             questions: questions,
             promptText: promptText,
             summaryShort: summaryShort,
-            summaryLong: summaryLong,
             transcriptPath: transcriptPath
         )
     }

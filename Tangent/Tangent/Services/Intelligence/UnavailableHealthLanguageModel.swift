@@ -14,15 +14,8 @@ final class UnavailableHealthLanguageModel: HealthLanguageModel {
         throw HealthLanguageModelError.unsupportedDevice
     }
 
-    func generateLongSummary(
-        transcript: String,
-        profile: PatientProfile
-    ) async throws -> GeneratedText {
-        throw HealthLanguageModelError.unsupportedDevice
-    }
-
     func generateInsights(
-        from entries: [DiaryEntry],
+        from summaries: [DiarySummary],
         period: String,
         onPartial: (@Sendable (String) -> Void)?
     ) async throws -> GeneratedText {

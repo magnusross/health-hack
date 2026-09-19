@@ -27,20 +27,22 @@ struct PromptTemplate: Equatable, Sendable {
             )
     }
 
-    func filled(period: String, dailySummaries: [String]) -> String {
-        text
+    func filled(period: String, summaries: [DiarySummary]) -> String {
+        let lines = summaries.sorted { $0.day < $1.day }.map { summary in
+            let day = summary.day.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))
+            return "\(day): \(summary.text)"
+        }
+        return text
             .replacingOccurrences(of: Self.periodPlaceholder, with: period)
             .replacingOccurrences(
                 of: Self.dailySummariesPlaceholder,
-                with: dailySummaries.joined(separator: "\n")
+                with: lines.joined(separator: "\n")
             )
     }
 }
 
 extension PromptTemplate {
-    /// The sentence the user reads. Kept separate from the long summary so it
-    /// arrives on screen in seconds rather than after a paragraph the user
-    /// never sees.
+    /// The single sentence stored for each diary entry.
     static let dailyShortSummary = PromptTemplate(
         text: """
         You are a helpful medical assistant. You are summarising one entry in a private
@@ -53,24 +55,6 @@ extension PromptTemplate {
         "I slept more deeply and woke up feeling refreshed."
         "A mild headache appeared after lunch but eased by evening."
         "My energy dipped in the afternoon, so I took a short walk."
-
-        Use the profile below to judge what to foreground. Do not treat anything in it
-        as something said in this entry.
-
-        USER PROFILE: {user_profile}
-
-        TRANSCRIPT: {transcript}
-        """
-    )
-
-    /// The clinical record. Never shown per day; insights read it across days.
-    static let dailyLongSummary = PromptTemplate(
-        text: """
-        You are a helpful medical assistant. You are summarising one entry in a private
-        voice diary.
-
-        Each sentence should be a single fact from the transcript. It should be in passive voice. 
-        Always refer to the user.
 
         Use the profile below to judge what to foreground. Do not treat anything in it
         as something said in this entry.

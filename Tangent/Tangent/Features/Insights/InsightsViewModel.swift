@@ -67,8 +67,12 @@ final class InsightsViewModel: ObservableObject {
             let selectedEntries = entries.filter {
                 $0.day >= fromDate && $0.day < endExclusive
             }
+            let summaries = selectedEntries.compactMap(DiarySummary.init)
+            guard !summaries.isEmpty else {
+                throw HealthLanguageModelError.notEnoughEntries
+            }
             let generated = try await healthModel.generateInsights(
-                from: selectedEntries,
+                from: summaries,
                 period: periodDescription,
                 onPartial: { [weak self] partial in
                     Task { @MainActor in

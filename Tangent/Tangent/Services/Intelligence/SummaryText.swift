@@ -6,8 +6,8 @@ import Foundation
 /// enough that stripping them is cheaper than another generation pass.
 enum SummaryText {
     private static let labels = [
-        "short_summary:", "long_summary:",
-        "short summary:", "long summary:",
+        "short_summary:",
+        "short summary:",
         "summary:", "notes:",
     ]
 

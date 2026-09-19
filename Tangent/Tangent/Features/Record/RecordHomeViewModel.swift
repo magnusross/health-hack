@@ -121,7 +121,7 @@ final class RecordHomeViewModel: ObservableObject {
     }
 
     /// Saves the entry with the audio path and the questions the patient was
-    /// actually shown. The transcript and both summaries are filled in on the
+    /// actually shown. The transcript and short summary are filled in on the
     /// daily details screen.
     private func saveTodayEntry(
         transcriptPath: String,

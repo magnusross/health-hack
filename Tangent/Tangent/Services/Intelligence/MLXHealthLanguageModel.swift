@@ -22,8 +22,6 @@ actor MLXHealthLanguageModel: HealthLanguageModel {
     /// The load in flight, if any. An actor suspends at every `await`, so
     /// without this a second caller arriving mid-load starts its own.
     private var loading: (model: SummaryModelID, task: Task<ModelContainer, Error>)?
-    /// The notes generation that is queued or running, if any.
-    private var longWork: Task<GeneratedText, Error>?
 
     /// Loads the selected model so a summary asked for moments later does not
     /// have to wait for weights to come off disk.
@@ -38,13 +36,6 @@ actor MLXHealthLanguageModel: HealthLanguageModel {
         profile: PatientProfile,
         onPartial: (@Sendable (String) -> Void)?
     ) async throws -> GeneratedText {
-        // The sentence is the only thing anyone is waiting for. Notes still
-        // running from an earlier entry are dropped rather than made to finish
-        // first — the model runs one job at a time, so a queued paragraph the
-        // user cannot see would sit in front of the sentence they can.
-        longWork?.cancel()
-        longWork = nil
-
         return try await generate(
             using: .dailyShortSummary,
             transcript: transcript,
@@ -55,41 +46,13 @@ actor MLXHealthLanguageModel: HealthLanguageModel {
         )
     }
 
-    func generateLongSummary(
-        transcript: String,
-        profile: PatientProfile
-    ) async throws -> GeneratedText {
-        longWork?.cancel()
-
-        let work = Task { () throws -> GeneratedText in
-            try await self.generate(
-                using: .dailyLongSummary,
-                transcript: transcript,
-                profile: profile,
-                maxTokens: 500,
-                label: "long",
-                onPartial: nil
-            )
-        }
-        longWork = work
-        defer { if longWork == work { longWork = nil } }
-
-        return try await work.value
-    }
-
-    /// Reads the notes from a range of days and writes what stands out.
-    ///
-    /// The notes are what the long summaries are for; entries without one fall
-    /// back to their sentence so a day is never silently dropped.
+    /// Generates insights using saved short summaries only.
     func generateInsights(
-        from entries: [DiaryEntry],
+        from summaries: [DiarySummary],
         period: String,
         onPartial: (@Sendable (String) -> Void)?
     ) async throws -> GeneratedText {
-        let days = entries
-            .sorted { $0.day < $1.day }
-            .compactMap(Self.noteLine)
-        guard !days.isEmpty else {
+        guard !summaries.isEmpty else {
             throw HealthLanguageModelError.notEnoughEntries
         }
 
@@ -101,7 +64,7 @@ actor MLXHealthLanguageModel: HealthLanguageModel {
         let container = try await container(for: model)
         let prompt = PromptTemplate.weeklyInsights.filled(
             period: period,
-            dailySummaries: days
+            summaries: summaries
         )
 
         let raw = try await complete(
@@ -120,16 +83,6 @@ actor MLXHealthLanguageModel: HealthLanguageModel {
         }
 
         return GeneratedText(text: text, promptText: prompt)
-    }
-
-    private static func noteLine(for entry: DiaryEntry) -> String? {
-        let notes = entry.summaryLong.trimmingCharacters(in: .whitespacesAndNewlines)
-        let sentence = entry.summaryShort.trimmingCharacters(in: .whitespacesAndNewlines)
-        let body = notes.isEmpty ? sentence : notes
-        guard !body.isEmpty else { return nil }
-
-        let day = entry.day.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))
-        return "\(day): \(body)"
     }
 
     private func generate(
