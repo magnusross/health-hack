@@ -1,3 +1,4 @@
+import Metal
 import SwiftData
 import SwiftUI
 
@@ -6,10 +7,39 @@ import SwiftUI
 struct TangentApp: App {
     private let modelContainer: ModelContainer
     private let dependencies: AppDependencies
+    @StateObject private var preferences: AppPreferences
 
     init() {
         do {
-            let modelContainer = try TangentModelContainer.make()
+            #if DEBUG
+            let isUITesting = ProcessInfo.processInfo.arguments.contains("--ui-testing")
+            let defaults = isUITesting ? UserDefaults(suiteName: "TangentUITests")! : .standard
+            if isUITesting && ProcessInfo.processInfo.arguments.contains("--reset-onboarding") {
+                defaults.removePersistentDomain(forName: "TangentUITests")
+            }
+            #else
+            let isUITesting = false
+            let defaults = UserDefaults.standard
+            #endif
+            var testStoreURL: URL?
+            #if DEBUG
+            if isUITesting {
+                let directory = URL.applicationSupportDirectory.appending(path: "TangentUITests")
+                if ProcessInfo.processInfo.arguments.contains("--reset-onboarding"), FileManager.default.fileExists(atPath: directory.path) {
+                    try FileManager.default.removeItem(at: directory)
+                }
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                testStoreURL = directory.appending(path: "diary.store")
+            }
+            #endif
+            let modelContainer = try TangentModelContainer.make(storeURL: testStoreURL)
+            let profileCount = try modelContainer.mainContext.fetchCount(FetchDescriptor<UserProfileRecord>())
+            let existingInstall = !isUITesting && profileCount > 0
+            let preferences = AppPreferences(defaults: defaults, existingInstall: existingInstall)
+            _preferences = StateObject(wrappedValue: preferences)
+            let aiService = OptionalAIService(
+                preferences: preferences, languageModel: Self.makeLanguageModel(), catalog: MLXModelCatalog()
+            )
             self.modelContainer = modelContainer
             try ProfileSeeder.seedIfNeeded(
                 in: modelContainer.mainContext
@@ -17,17 +47,19 @@ struct TangentApp: App {
             try PromptSeeder.seedPrompts(
                 in: modelContainer.mainContext
             )
-            try DemoDataSeeder.seedIfNeeded(
-                in: modelContainer.mainContext
-            )
+            #if DEBUG
+            if isUITesting && ProcessInfo.processInfo.arguments.contains("--demo-data") {
+                try DemoDataSeeder.seedIfNeeded(in: modelContainer.mainContext)
+            }
+            #endif
             dependencies = AppDependencies(
                 noteStore: SwiftDataNoteStore(
                     modelContext: modelContainer.mainContext
                 ),
                 audioRecorder: AVAudioRecorderService(),
                 transcriber: OnDeviceTranscriber(),
-                languageModel: Self.makeLanguageModel(),
-                modelCatalog: MLXModelCatalog(),
+                languageModel: aiService,
+                modelCatalog: aiService,
                 reminderScheduler: LocalReminderScheduler()
             )
         } catch {
@@ -41,13 +73,23 @@ struct TangentApp: App {
         #if targetEnvironment(simulator)
         UnavailableDiaryLanguageModel()
         #else
-        MLXDiaryLanguageModel()
+        guard MTLCreateSystemDefaultDevice()?.supportsFamily(.apple7) == true else {
+            return UnavailableDiaryLanguageModel(error: .unsupportedHardware)
+        }
+        return MLXDiaryLanguageModel()
         #endif
     }
 
     var body: some Scene {
         WindowGroup {
-            ContentView(dependencies: dependencies)
+            Group {
+                if preferences.onboardingCompleted {
+                    ContentView(dependencies: dependencies)
+                } else {
+                    OnboardingView(noteStore: dependencies.noteStore)
+                }
+            }
+            .environmentObject(preferences)
         }
         .modelContainer(modelContainer)
     }

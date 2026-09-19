@@ -136,6 +136,7 @@ actor MLXDiaryLanguageModel: DiaryLanguageModel {
         label: String,
         onPartial: (@Sendable (String) -> Void)?
     ) async throws -> String {
+        try Task.checkCancellation()
         // Near-deterministic: this is a record of what the user said, not a
         // piece of writing that benefits from variety.
         let parameters = GenerateParameters(maxTokens: maxTokens, temperature: 0.2)
@@ -150,6 +151,7 @@ actor MLXDiaryLanguageModel: DiaryLanguageModel {
                 prompt: prompt,
                 additionalContext: model.disablesThinking ? ["enable_thinking": false] : nil
             ))
+            try Task.checkCancellation()
             return try MLXLMCommon.generate(input: input, parameters: parameters, context: context)
         }
         #else
@@ -157,6 +159,7 @@ actor MLXDiaryLanguageModel: DiaryLanguageModel {
             prompt: prompt,
             additionalContext: model.disablesThinking ? ["enable_thinking": false] : nil
         ))
+        try Task.checkCancellation()
         let stream = try await container.generate(input: input, parameters: parameters)
         #endif
 

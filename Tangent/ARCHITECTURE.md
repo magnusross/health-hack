@@ -4,6 +4,7 @@
 
 - `Tangent/App/` creates the SwiftData container and injects application dependencies.
 - `Tangent/DesignSystem/` owns shared semantic colours and future reusable UI tokens.
+- `Tangent/Features/Onboarding/` collects the initial profile using the same profile-saving logic as Settings.
 - `Tangent/Features/Record/` and `Tangent/Features/Library/` own their respective SwiftUI views and feature logic.
 - `Tangent/Domain/` contains persistence-independent app models and service protocols.
 - `Tangent/Data/` contains SwiftData models, domain conversions, container setup, and the `NoteStore` implementation.
@@ -18,17 +19,19 @@ Features depend on domain models and protocols. `Data` and `Services` implement 
 
 `TangentModelContainer` owns the schema for user profiles, prompts, questions, diary entries, and insights. `SwiftDataNoteStore` provides async CRUD-style operations and converts between SwiftData records and domain values. Diary questions and populated prompt text are stored as historical snapshots.
 
-Use an in-memory container for tests and previews. The app uses the default local SwiftData store; no data leaves the device.
+Use an in-memory container for unit tests and previews. UI tests use an isolated store and preferences suite so relaunches can verify persistence. The app uses the default local SwiftData store; no data leaves the device.
 
 ## On-device generation
 
 `DiaryLanguageModel` and `ModelCatalog` are domain protocols. Features use
 these protocols; only `Services/Intelligence` imports MLX. `App` injects
 `MLXDiaryLanguageModel` on devices and `UnavailableDiaryLanguageModel` on the
-simulator. The simulator can exercise diary workflows without model inference.
+simulator, wrapped by `OptionalAIService`. The wrapper gates warmup, generation, and downloads using shared `AppPreferences`, cancels active work when disabled, and rejects late results. The simulator can exercise diary workflows without model inference.
+
+`AppPreferences` persists AI and onboarding choices in UserDefaults. New installs start with AI off; existing installs retain their enabled workflow and skip onboarding. Completing onboarding saves the profile before marking setup complete. Downloads remain explicit in Settings. AI-off diary cards use transcript previews; daily details hide summaries, and Insights disables generation.
 
 Recording saves an entry, then `DailyTangentDetailsViewModel` transcribes the
-recording and requests one short summary. It stores the sentence and its filled
+recording and, when AI is enabled, requests one short summary. It stores the sentence and its filled
 prompt, and reuses the saved summary when the entry is reopened. There is no
 background second generation task. Transcripts remain available in daily details.
 

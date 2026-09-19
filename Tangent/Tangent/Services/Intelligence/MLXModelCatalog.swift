@@ -17,6 +17,7 @@ import Tokenizers
 @MainActor
 final class MLXModelCatalog: ModelCatalog {
     private var downloads: [SummaryModelID: Task<Void, Error>] = [:]
+    private var downloadIDs: [SummaryModelID: UUID] = [:]
     private var progresses: [SummaryModelID: DownloadProgress] = [:]
 
     var selectedModel: SummaryModelID {
@@ -47,6 +48,8 @@ final class MLXModelCatalog: ModelCatalog {
             return try await existing.value
         }
 
+        let downloadID = UUID()
+        downloadIDs[model] = downloadID
         progresses[model] = DownloadProgress(completedBytes: 0, totalBytes: 0)
         let task = Task<Void, Error> { [weak self] in
             #if TANGENT_LEGACY_MLX
@@ -60,7 +63,8 @@ final class MLXModelCatalog: ModelCatalog {
                         completedFraction: progress.fractionCompleted
                     )
                     Task { @MainActor in
-                        self?.progresses[model] = update
+                        guard let self, self.downloadIDs[model] == downloadID else { return }
+                        self.progresses[model] = update
                         onProgress(update)
                     }
                 }
@@ -81,7 +85,8 @@ final class MLXModelCatalog: ModelCatalog {
                         totalBytes: progress.totalUnitCount
                     )
                     Task { @MainActor in
-                        self?.progresses[model] = update
+                        guard let self, self.downloadIDs[model] == downloadID else { return }
+                        self.progresses[model] = update
                         onProgress(update)
                     }
                 }
@@ -91,13 +96,21 @@ final class MLXModelCatalog: ModelCatalog {
         downloads[model] = task
 
         defer {
-            downloads[model] = nil
-            progresses[model] = nil
+            if downloadIDs[model] == downloadID {
+                downloads[model] = nil
+                progresses[model] = nil
+                downloadIDs[model] = nil
+            }
         }
-        try await task.value
+        try await withTaskCancellationHandler {
+            try await task.value
+        } onCancel: {
+            task.cancel()
+        }
     }
 
     func cancelDownload(_ model: SummaryModelID) {
+        downloadIDs[model] = nil
         downloads[model]?.cancel()
         downloads[model] = nil
         progresses[model] = nil

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     private enum ProfileField: Hashable { case name, interests, concerns }
+    @EnvironmentObject private var preferences: AppPreferences
     @StateObject private var model: SettingsViewModel
     @FocusState private var focusedProfileField: ProfileField?
 
@@ -72,7 +73,9 @@ struct SettingsView: View {
         }
         .task {
             await model.load()
-            await model.loadModels()
+        }
+        .task(id: preferences.aiEnabled) {
+            if preferences.aiEnabled { await model.loadModels() }
         }
     }
 
@@ -137,8 +140,12 @@ struct SettingsView: View {
 
     private var modelSection: some View {
         Section {
-            ForEach(SummaryModelID.allCases) { summaryModel in
-                modelRow(summaryModel)
+            AIToggle()
+            if preferences.aiEnabled {
+                AIRequirementsNote()
+                ForEach(SummaryModelID.allCases) { summaryModel in
+                    modelRow(summaryModel)
+                }
             }
         } header: {
             Text("Model")

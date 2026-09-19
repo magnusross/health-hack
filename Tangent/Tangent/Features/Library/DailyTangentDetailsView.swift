@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct DailyTangentDetailsView: View {
+    @EnvironmentObject private var preferences: AppPreferences
     @StateObject private var model: DailyTangentDetailsViewModel
     private let calendar: Calendar
     private let redoToday: (() -> Void)?
@@ -46,10 +47,11 @@ struct DailyTangentDetailsView: View {
                         .font(.system(.title2, design: .serif, weight: .medium))
                         .foregroundStyle(Color.tangentInk)
 
-                        summarySection(for: entry)
-
-                        Divider()
-                            .overlay(Color.tangentInk.opacity(0.1))
+                        if preferences.aiEnabled {
+                            summarySection(for: entry)
+                            Divider()
+                                .overlay(Color.tangentInk.opacity(0.1))
+                        }
 
                         detailSection(
                             title: "Transcript",
@@ -94,6 +96,11 @@ struct DailyTangentDetailsView: View {
         .task {
             await model.start()
         }
+        .onChange(of: preferences.aiEnabled) { _, enabled in
+            if enabled && !model.hasSummary && !model.isGenerating {
+                Task { await model.regenerate() }
+            }
+        }
     }
 
     private var transcriptText: String {
@@ -136,9 +143,13 @@ struct DailyTangentDetailsView: View {
         case .writing(let text), .written(let text):
             summaryText(text)
 
-        case .failed(_, let needsModel):
+        case .failed(let message, let needsModel):
             VStack(alignment: .leading, spacing: 12) {
-                unavailableText
+                Text(needsModel
+                     ? "Download your preferred model in Settings to generate a summary."
+                     : message)
+                    .font(.system(.body, design: .serif))
+                    .foregroundStyle(Color.tangentInk.opacity(0.6))
 
                 if needsModel, let openSettings {
                     Button("Choose a model", action: openSettings)
@@ -197,4 +208,5 @@ struct DailyTangentDetailsView: View {
     NavigationStack {
         DailyTangentDetailsView(noteStore: store, diaryID: UUID())
     }
+    .environmentObject(AppPreferences(defaults: UserDefaults(suiteName: "TangentPreview")!))
 }

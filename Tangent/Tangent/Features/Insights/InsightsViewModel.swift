@@ -82,6 +82,7 @@ final class InsightsViewModel: ObservableObject {
                     }
                 }
             )
+            try Task.checkCancellation()
             let insight = Insight(
                 day: Date(),
                 generatedFrom: fromDate,
@@ -91,6 +92,8 @@ final class InsightsViewModel: ObservableObject {
             )
             try await noteStore.saveInsight(insight)
             generatedInsight = insight
+            streamingInsight = ""
+        } catch where error is CancellationError || error as? DiaryLanguageModelError == .aiDisabled {
             streamingInsight = ""
         } catch {
             // The model says why — no model downloaded, nothing in range —

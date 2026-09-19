@@ -11,22 +11,30 @@ struct DiaryTimelineDay: Identifiable, Equatable {
 @MainActor
 final class DiaryHomeViewModel: ObservableObject {
     @Published private(set) var days: [DiaryTimelineDay]
+    @Published private(set) var needsModel = false
+    @Published private(set) var transcriptPreviews: [UUID: String] = [:]
     @Published private(set) var loadError: String?
 
     private let noteStore: any NoteStore
     private let calendar: Calendar
+    private let modelCatalog: (any ModelCatalog)?
 
     init(
         noteStore: any NoteStore,
+        modelCatalog: (any ModelCatalog)? = nil,
         calendar: Calendar = .autoupdatingCurrent
     ) {
         self.noteStore = noteStore
+        self.modelCatalog = modelCatalog
         self.calendar = calendar
         days = Self.makeTimeline(entries: [], today: Date(), calendar: calendar)
     }
 
     func load() async {
         do {
+            if let modelCatalog {
+                needsModel = !(await modelCatalog.state(of: modelCatalog.selectedModel)).isReady
+            }
             let currentProfile = try await noteStore.userProfiles().first
             let entries: [DiaryEntry]
             if let currentProfile {
@@ -37,6 +45,9 @@ final class DiaryHomeViewModel: ObservableObject {
                 entries = []
             }
 
+            transcriptPreviews = Dictionary(uniqueKeysWithValues: entries.map { entry in
+                (entry.id, Self.transcriptPreview(at: entry.transcriptPath))
+            })
             days = Self.makeTimeline(
                 entries: entries,
                 today: Date(),
@@ -46,6 +57,15 @@ final class DiaryHomeViewModel: ObservableObject {
         } catch {
             loadError = "Your diary could not be loaded."
         }
+    }
+
+    nonisolated static func transcriptPreview(at path: String) -> String {
+        guard let transcript = DailyTangentDetailsViewModel.loadTranscript(at: path) else {
+            return "Transcript not available"
+        }
+        let text = transcript.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        let trailingCharacters = CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "."))
+        return String(text.prefix(140)).trimmingCharacters(in: trailingCharacters) + "..."
     }
 
     nonisolated static func makeTimeline(

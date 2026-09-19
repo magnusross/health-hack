@@ -25,7 +25,9 @@ final class TangentUITests: XCTestCase {
     @MainActor
     func testDiaryNavigation() throws {
         let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing", "--reset-onboarding"]
         app.launch()
+        app.buttons["complete-onboarding"].tap()
 
         let settingsButton = app.buttons["Settings"]
         XCTAssertTrue(settingsButton.waitForExistence(timeout: 3))
@@ -36,11 +38,11 @@ final class TangentUITests: XCTestCase {
 
         app.navigationBars["Settings"].buttons.firstMatch.tap()
 
-        let recordTodayButton = app.buttons["Record today’s Tangent"]
+        let recordTodayButton = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Record today’s Tangent")).firstMatch
         XCTAssertTrue(recordTodayButton.waitForExistence(timeout: 2))
         recordTodayButton.tap()
         XCTAssertTrue(
-            app.navigationBars["Record Tangent"].waitForExistence(timeout: 2)
+            app.buttons["Start recording"].waitForExistence(timeout: 2)
         )
 
         app.tabBars.buttons["Insights"].tap()
@@ -52,7 +54,9 @@ final class TangentUITests: XCTestCase {
     @MainActor
     func testGeneralProfileAndModelChoices() throws {
         let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing", "--reset-onboarding"]
         app.launch()
+        app.buttons["complete-onboarding"].tap()
         app.buttons["Settings"].tap()
         XCTAssertTrue(app.textFields["profile-name"].waitForExistence(timeout: 3))
         XCTAssertFalse(app.staticTexts["Health context"].exists)
@@ -62,6 +66,9 @@ final class TangentUITests: XCTestCase {
         interests.typeText("Creative writing")
         app.buttons["save-profile"].tap()
 
+        let ai = app.switches["ai-enabled"]
+        for _ in 0..<5 where !ai.isHittable { app.swipeUp() }
+        ai.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
         let qwen = app.buttons["model-qwen2.5-0.5b-instruct-4bit"]
         for _ in 0..<5 where !qwen.isHittable { app.swipeUp() }
         XCTAssertTrue(qwen.isHittable)
@@ -69,6 +76,93 @@ final class TangentUITests: XCTestCase {
         XCTAssertEqual(qwen.value as? String, "Selected")
         // Choosing a model is a preference; it must not start downloading weights.
         XCTAssertFalse(app.buttons["Cancel"].exists)
+    }
+
+    @MainActor
+    func testFirstLaunchWithAIOptional() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing", "--reset-onboarding"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Welcome to Tangent"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.switches["ai-enabled"].value as? String, "0")
+        XCTAssertEqual(app.switches["ai-enabled"].label, "AI summaries")
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Onboarding"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+        let onboardingAI = app.switches["ai-enabled"]
+        let concernsField = app.descendants(matching: .any).matching(identifier: "profile-concerns").firstMatch
+        XCTAssertGreaterThan(onboardingAI.frame.minY, concernsField.frame.maxY)
+        onboardingAI.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
+        XCTAssertTrue(app.staticTexts["Download your preferred model in Settings to generate summaries."].exists)
+        let enabledScreenshot = XCTAttachment(screenshot: app.screenshot())
+        enabledScreenshot.name = "Onboarding with AI summaries on"
+        enabledScreenshot.lifetime = .keepAlways
+        add(enabledScreenshot)
+        onboardingAI.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
+        let name = app.textFields["profile-name"]
+        name.tap()
+        name.typeText("Alex")
+        app.buttons["Done"].tap()
+        let interests = app.descendants(matching: .any).matching(identifier: "profile-interests").firstMatch
+        for _ in 0..<5 where !interests.exists || !interests.isHittable { app.swipeUp() }
+        interests.tap()
+        app.typeText("Drawing")
+        app.buttons["Done"].tap()
+        let concerns = app.descendants(matching: .any).matching(identifier: "profile-concerns").firstMatch
+        for _ in 0..<5 where !concerns.exists || !concerns.isHittable { app.swipeUp() }
+        concerns.tap()
+        app.typeText("Finding time")
+        app.buttons["Done"].tap()
+        app.buttons["complete-onboarding"].tap()
+        XCTAssertTrue(app.buttons["Settings"].waitForExistence(timeout: 3))
+        app.buttons["Settings"].tap()
+        XCTAssertEqual(app.textFields["profile-name"].value as? String, "Alex")
+        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "profile-interests").firstMatch.exists)
+        let ai = app.switches["ai-enabled"]
+        for _ in 0..<5 where !ai.isHittable { app.swipeUp() }
+        XCTAssertEqual(ai.value as? String, "0")
+        XCTAssertFalse(app.buttons["model-qwen3-0.6b-4bit"].exists)
+        ai.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
+        XCTAssertTrue(app.buttons["model-qwen3-0.6b-4bit"].waitForExistence(timeout: 2))
+        ai.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
+        XCTAssertFalse(app.buttons["model-qwen3-0.6b-4bit"].exists)
+        app.navigationBars["Settings"].buttons.firstMatch.tap()
+        app.tabBars.buttons["Insights"].tap()
+        XCTAssertFalse(app.buttons["generate-insight"].isEnabled)
+        XCTAssertTrue(app.staticTexts["Turn on model in Settings for this functionality."].exists)
+        let insightsScreenshot = XCTAttachment(screenshot: app.screenshot())
+        insightsScreenshot.name = "Insights with AI off"
+        insightsScreenshot.lifetime = .keepAlways
+        add(insightsScreenshot)
+        app.terminate()
+        app.launchArguments = ["--ui-testing"]
+        app.launch()
+        XCTAssertTrue(app.buttons["Settings"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.staticTexts["Welcome to Tangent"].exists)
+        app.buttons["Settings"].tap()
+        XCTAssertEqual(app.textFields["profile-name"].value as? String, "Alex")
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "profile-interests").firstMatch.value as? String, "Drawing")
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "profile-concerns").firstMatch.value as? String, "Finding time")
+    }
+
+    @MainActor
+    func testDiaryUsesTranscriptWhenAIIsOff() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing", "--reset-onboarding", "--demo-data"]
+        app.launch()
+        app.buttons["complete-onboarding"].tap()
+        let entry = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Hi. I wanted to check in about today.")).firstMatch
+        for _ in 0..<5 where !entry.isHittable { app.swipeDown() }
+        XCTAssertTrue(entry.exists)
+        XCTAssertTrue(entry.label.hasSuffix("..."))
+        entry.tap()
+        XCTAssertTrue(app.staticTexts["Transcript"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.staticTexts["Summary"].exists)
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Daily diary with AI off"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
     }
 
     @MainActor

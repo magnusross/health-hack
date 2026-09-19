@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct InsightsView: View {
+    @EnvironmentObject private var preferences: AppPreferences
     @StateObject private var model: InsightsViewModel
 
     init(
@@ -30,7 +31,7 @@ struct InsightsView: View {
                 VStack(spacing: 24) {
                     generator
 
-                    if model.isGenerating {
+                    if preferences.aiEnabled && model.isGenerating {
                         // The words themselves say it is working, so there is
                         // nothing to spin until the first one arrives.
                         if model.streamingInsight.isEmpty {
@@ -95,7 +96,7 @@ struct InsightsView: View {
                 Task { await model.generateInsight() }
             } label: {
                 Group {
-                    if model.isGenerating {
+                    if preferences.aiEnabled && model.isGenerating {
                         ProgressView()
                             .tint(.white)
                     } else {
@@ -108,9 +109,15 @@ struct InsightsView: View {
             }
             .buttonStyle(.borderedProminent)
             .tint(Color.tangentPurple)
-            .disabled(model.isGenerating)
+            .disabled(!preferences.aiEnabled || model.isGenerating)
+            .accessibilityIdentifier("generate-insight")
 
-            if let generationError = model.generationError {
+            if !preferences.aiEnabled {
+                Text("Turn on model in Settings for this functionality.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            } else if let generationError = model.generationError {
                 Text(generationError)
                     .font(.system(.footnote))
                     .foregroundStyle(.red)
@@ -184,4 +191,5 @@ struct InsightsView: View {
             languageModel: UnavailableDiaryLanguageModel()
         )
     }
+    .environmentObject(AppPreferences(defaults: UserDefaults(suiteName: "TangentPreview")!))
 }

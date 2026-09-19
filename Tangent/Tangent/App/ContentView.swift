@@ -19,6 +19,7 @@ struct ContentView: View {
             NavigationStack(path: $diaryPath) {
                 DiaryHomeView(
                     noteStore: dependencies.noteStore,
+                    modelCatalog: dependencies.modelCatalog,
                     openEntry: { diaryPath.append(.details($0)) },
                     openRecord: { selectedTab = .record },
                     openSettings: { diaryPath.append(.settings) }
@@ -193,4 +194,5 @@ private enum RecordRoute: Hashable {
             reminderScheduler: UnavailableReminderScheduler()
         )
     )
+    .environmentObject(AppPreferences(defaults: UserDefaults(suiteName: "TangentPreview")!))
 }

@@ -43,6 +43,8 @@ protocol DiaryLanguageModel: AnyObject, Sendable {
 
 enum DiaryLanguageModelError: LocalizedError, Equatable {
     /// No Metal GPU, so no on-device inference. The Simulator lands here.
+    case aiDisabled
+    case unsupportedHardware
     case unsupportedDevice
     case modelNotDownloaded(SummaryModelID)
     case modelLoadFailed(String)
@@ -54,6 +56,10 @@ enum DiaryLanguageModelError: LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
+        case .aiDisabled:
+            "Turn on model in Settings for this functionality."
+        case .unsupportedHardware:
+            "AI summaries require an A14, M1 or newer chip."
         case .unsupportedDevice:
             "Summaries need a real device. The simulator cannot run the model."
         case .modelNotDownloaded(let model):

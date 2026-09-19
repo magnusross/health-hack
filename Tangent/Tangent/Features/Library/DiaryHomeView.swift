@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct DiaryHomeView: View {
+    @EnvironmentObject private var preferences: AppPreferences
     @StateObject private var model: DiaryHomeViewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -11,6 +12,7 @@ struct DiaryHomeView: View {
 
     init(
         noteStore: any NoteStore,
+        modelCatalog: (any ModelCatalog)? = nil,
         calendar: Calendar = .autoupdatingCurrent,
         openEntry: @escaping (UUID) -> Void,
         openRecord: @escaping () -> Void,
@@ -19,6 +21,7 @@ struct DiaryHomeView: View {
         _model = StateObject(
             wrappedValue: DiaryHomeViewModel(
                 noteStore: noteStore,
+                modelCatalog: modelCatalog,
                 calendar: calendar
             )
         )
@@ -53,7 +56,7 @@ struct DiaryHomeView: View {
         .toolbar(.hidden, for: .navigationBar)
         .toolbarBackground(.hidden, for: .tabBar)
         .toolbarBackgroundVisibility(.hidden, for: .tabBar)
-        .task {
+        .task(id: preferences.aiEnabled) {
             await model.load()
         }
         .onAppear {
@@ -135,12 +138,17 @@ struct DiaryHomeView: View {
         // or none was available — still has a transcript worth opening, so the
         // row says so rather than sitting blank.
         let hasSummary = !entry.summaryShort.isEmpty
-        let summary = hasSummary ? entry.summaryShort : "Summary not written yet"
+        let placeholder = model.needsModel
+            ? "Download your preferred model in Settings to generate a summary."
+            : "Summary not written yet"
+        let summary = preferences.aiEnabled
+            ? (hasSummary ? entry.summaryShort : placeholder)
+            : (model.transcriptPreviews[entry.id] ?? "Transcript not available")
 
         return dayCard(on: date, chrome: .filled, action: { openEntry(entry.id) }) {
             Text(summary)
                 .font(.system(.callout, design: .serif))
-                .foregroundStyle(Color.tangentInk.opacity(hasSummary ? 1 : 0.5))
+                .foregroundStyle(Color.tangentInk.opacity(!preferences.aiEnabled || hasSummary ? 1 : 0.5))
                 .multilineTextAlignment(.center)
                 .lineLimit(3)
                 .truncationMode(.tail)

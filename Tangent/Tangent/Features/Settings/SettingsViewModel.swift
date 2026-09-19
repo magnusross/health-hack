@@ -81,8 +81,9 @@ final class SettingsViewModel: ObservableObject {
         }
     }
 
-    func saveProfile() async {
-        guard var profile, !isSavingProfile else { return }
+    @discardableResult
+    func saveProfile() async -> Bool {
+        guard var profile, !isSavingProfile else { return false }
         isSavingProfile = true
         defer { isSavingProfile = false }
         profile.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -92,8 +93,10 @@ final class SettingsViewModel: ObservableObject {
             try await noteStore.saveUserProfile(profile)
             self.profile = profile
             message = "Profile saved."
+            return true
         } catch {
             message = error.localizedDescription
+            return false
         }
     }
 

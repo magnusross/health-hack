@@ -3,7 +3,7 @@
 Tangent is an on-device voice diary for any topic. Record a check-in, read its transcript and
 short summary, and review insights based on short summaries and your interests and concerns.
 Diary data, transcription, and model inference stay on the device. Model weights
-are downloaded from Hugging Face when selected in Settings.
+are downloaded from Hugging Face only when you tap Download in Settings.
 
 ## Requirements
 
@@ -51,13 +51,27 @@ a model download in Settings.
 
 ## Models
 
-Choose a model in Settings and download it before generating summaries:
+First launch offers a single setup screen for name, interests, concerns, and optional AI.
+**AI summaries** is the last onboarding option and starts off: recordings still transcribe, diary cards show transcript previews, and
+summary and insight generation are disabled. Turn AI on in Settings to reveal model
+choices, then download a model before generating summaries. Turning AI off cancels
+model work and keeps existing diary data and downloaded weights.
+
+Available models:
 
 - [Qwen3 0.6B](https://huggingface.co/mlx-community/Qwen3-0.6B-4bit): compact default, approximately 350 MB.
 - [Qwen2.5 0.5B](https://huggingface.co/mlx-community/Qwen2.5-0.5B-Instruct-4bit): smallest option, approximately 300 MB.
 - [Qwen3 1.7B](https://huggingface.co/mlx-community/Qwen3-1.7B-4bit): larger general-purpose option, approximately 1 GB.
 - Gemma 3 1B: alternative general-purpose model, approximately 800 MB.
 - MedGemma 1.5 4B: specialist option, approximately 2.5 GB.
+
+AI summaries require an A14/M1-class GPU or newer and iOS/iPadOS 18.2+.
+For iPhones, that means iPhone 12 or later, including iPhone SE (3rd generation).
+This hardware baseline follows the SIMD matrix operations used by MLX and
+[Apple’s Metal feature table](https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf);
+Apple lists A14 in [iPhone 12](https://support.apple.com/en-us/111876) and A15 in
+[iPhone SE (3rd generation)](https://support.apple.com/en-gb/111866).
+It is not a claim that every model has been tested on every compatible device.
 
 These are supported 4-bit MLX models. Download size is not total runtime memory;
 performance depends on the device and input length. Qwen3 thinking mode is

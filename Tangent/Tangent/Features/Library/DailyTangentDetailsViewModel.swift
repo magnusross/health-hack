@@ -221,11 +221,15 @@ final class DailyTangentDetailsViewModel: ObservableObject {
                 }
             )
 
+            try Task.checkCancellation()
             var updated = entry
             updated.summaryShort = short.text
             updated.promptText = short.promptText
             try await noteStore.saveDiaryEntry(updated)
             self.entry = updated
+            streamingShortSummary = ""
+            summaryState = .settled
+        } catch where error is CancellationError || error as? DiaryLanguageModelError == .aiDisabled {
             streamingShortSummary = ""
             summaryState = .settled
         } catch {

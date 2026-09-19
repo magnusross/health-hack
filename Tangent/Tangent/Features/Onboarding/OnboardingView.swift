@@ -1,0 +1,98 @@
+import SwiftUI
+
+struct OnboardingView: View {
+    @EnvironmentObject private var preferences: AppPreferences
+    @StateObject private var model: SettingsViewModel
+    private enum Field: Hashable { case name, interests, concerns }
+    @FocusState private var focusedField: Field?
+
+    init(noteStore: any NoteStore) {
+        _model = StateObject(wrappedValue: SettingsViewModel(
+            noteStore: noteStore, reminderScheduler: UnavailableReminderScheduler()
+        ))
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    VStack(spacing: 12) {
+                        Image("Logo")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 56, height: 56)
+                            .accessibilityHidden(true)
+                        Text("Welcome to Tangent")
+                            .font(.system(.title2, design: .serif, weight: .medium))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .listRowBackground(Color.clear)
+                }
+                Section("Profile") {
+                    TextField("Name", text: $model.name)
+                        .textContentType(.givenName)
+                        .accessibilityIdentifier("profile-name")
+                        .focused($focusedField, equals: .name)
+                }
+                Section("Your focus") {
+                    TextField("Interests", text: $model.interests, axis: .vertical)
+                        .lineLimit(2...5)
+                        .accessibilityIdentifier("profile-interests")
+                        .focused($focusedField, equals: .interests)
+                    TextField("Concerns", text: $model.concerns, axis: .vertical)
+                        .lineLimit(2...5)
+                        .accessibilityIdentifier("profile-concerns")
+                        .focused($focusedField, equals: .concerns)
+                }
+                Section {
+                    AIToggle()
+                } footer: {
+                    if preferences.aiEnabled {
+                        VStack(alignment: .leading, spacing: 6) {
+                            AIRequirementsNote()
+                            Text("Download your preferred model in Settings to generate summaries.")
+                        }
+                    }
+                }
+                if let message = model.message {
+                    Section { Text(message).foregroundStyle(.secondary) }
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .scrollDismissesKeyboard(.interactively)
+            .background(Color.tangentWash)
+            .foregroundStyle(Color.tangentInk)
+            .safeAreaInset(edge: .bottom) {
+                Button {
+                    focusedField = nil
+                    Task {
+                        if model.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { model.name = "You" }
+                        if await model.saveProfile() { preferences.completeOnboarding() }
+                    }
+                } label: {
+                    Text("Get started")
+                        .font(.system(.body, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(model.isLoading || model.isSavingProfile)
+                .accessibilityIdentifier("complete-onboarding")
+                .padding(20)
+                .background(.bar)
+            }
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") { focusedField = nil }
+                }
+            }
+            .task {
+                await model.load()
+                if model.name == "You" { model.name = "" }
+            }
+        }
+        .tint(Color.tangentPurple)
+    }
+}
