@@ -8,6 +8,7 @@ final class DailyTangentDetailsViewModel: ObservableObject {
         /// start. The screen says nothing rather than claiming there is no
         /// summary a moment before writing one.
         case pending
+        case waiting
         case generating
         case settled
         /// `needsModel` means no weights are on disk, so the fix is in Settings
@@ -19,6 +20,7 @@ final class DailyTangentDetailsViewModel: ObservableObject {
     /// to reconcile a state with a half-arrived stream and flicker between them.
     enum SummaryDisplay: Equatable {
         case nothingYet
+        case waiting
         case writing(String)
         case written(String)
         case failed(message: String, needsModel: Bool)
@@ -56,6 +58,7 @@ final class DailyTangentDetailsViewModel: ObservableObject {
 
     var isGenerating: Bool {
         if case .generating = summaryState { return true }
+        if case .waiting = summaryState { return true }
         return false
     }
 
@@ -63,6 +66,9 @@ final class DailyTangentDetailsViewModel: ObservableObject {
         switch summaryState {
         case .pending:
             return .nothingYet
+
+        case .waiting:
+            return .waiting
 
         case .failed(let message, let needsModel):
             return .failed(message: message, needsModel: needsModel)
@@ -208,7 +214,7 @@ final class DailyTangentDetailsViewModel: ObservableObject {
         guard let languageModel, let entry else { return }
 
         streamingShortSummary = ""
-        summaryState = .generating
+        summaryState = .waiting
         do {
             let short = try await languageModel.generateShortSummary(
                 transcript: transcript,
@@ -217,6 +223,12 @@ final class DailyTangentDetailsViewModel: ObservableObject {
                     Task { @MainActor in
                         guard let self, self.isGenerating else { return }
                         self.streamingShortSummary = partial
+                    }
+                },
+                onStatus: { [weak self] status in
+                    Task { @MainActor in
+                        guard let self, self.isGenerating else { return }
+                        self.summaryState = status == .waiting ? .waiting : .generating
                     }
                 }
             )
@@ -233,6 +245,7 @@ final class DailyTangentDetailsViewModel: ObservableObject {
             streamingShortSummary = ""
             summaryState = .settled
         } catch {
+            streamingShortSummary = ""
             summaryState = .failed(
                 message: error.localizedDescription,
                 needsModel: Self.needsModel(error)

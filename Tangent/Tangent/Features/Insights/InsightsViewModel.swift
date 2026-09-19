@@ -5,6 +5,7 @@ import Foundation
 final class InsightsViewModel: ObservableObject {
     @Published private(set) var generatedInsight: Insight?
     @Published private(set) var isGenerating = false
+    @Published private(set) var isWaiting = false
     /// The insights as the model writes them, until the saved one takes over.
     @Published private(set) var streamingInsight = ""
     @Published private(set) var generationError: String?
@@ -15,24 +16,36 @@ final class InsightsViewModel: ObservableObject {
     private let languageModel: any DiaryLanguageModel
     private let calendar: Calendar
     private let maximumToDate: Date
+    @Published private(set) var selectedModel: SummaryModelID
 
     init(
         noteStore: any NoteStore,
         languageModel: any DiaryLanguageModel,
+        selectedModel: SummaryModelID = .default,
         calendar: Calendar = .autoupdatingCurrent,
         now: Date = Date()
     ) {
         self.noteStore = noteStore
         self.languageModel = languageModel
+        self.selectedModel = selectedModel
         self.calendar = calendar
         let today = calendar.startOfDay(for: now)
         maximumToDate = today
         toDate = today
-        fromDate = calendar.date(byAdding: .day, value: -14, to: today) ?? today
+        fromDate = Self.earliestDate(before: today, model: selectedModel, calendar: calendar)
     }
 
     var earliestFromDate: Date {
-        calendar.date(byAdding: .day, value: -14, to: toDate) ?? toDate
+        Self.earliestDate(before: toDate, model: selectedModel, calendar: calendar)
+    }
+
+    var insightSpanDescription: String {
+        selectedModel.insightSpanDescription
+    }
+
+    func setSelectedModel(_ model: SummaryModelID) {
+        selectedModel = model
+        fromDate = min(max(fromDate, earliestFromDate), toDate)
     }
 
     var latestToDate: Date {
@@ -51,10 +64,14 @@ final class InsightsViewModel: ObservableObject {
     func generateInsight() async {
         guard !isGenerating else { return }
         isGenerating = true
+        isWaiting = true
         generatedInsight = nil
         generationError = nil
         streamingInsight = ""
-        defer { isGenerating = false }
+        defer { isGenerating = false; isWaiting = false }
+        let requestedFrom = fromDate
+        let requestedTo = toDate
+        let requestedPeriod = periodDescription
 
         do {
             let profile = try await noteStore.userProfiles().first
@@ -62,10 +79,10 @@ final class InsightsViewModel: ObservableObject {
             let endExclusive = calendar.date(
                 byAdding: .day,
                 value: 1,
-                to: toDate
-            ) ?? toDate
+                to: requestedTo
+            ) ?? requestedTo
             let selectedEntries = entries.filter {
-                $0.day >= fromDate && $0.day < endExclusive
+                $0.day >= requestedFrom && $0.day < endExclusive
             }
             let summaries = selectedEntries.compactMap(DiarySummary.init)
             guard !summaries.isEmpty else {
@@ -74,19 +91,25 @@ final class InsightsViewModel: ObservableObject {
             let generated = try await languageModel.generateInsights(
                 from: summaries,
                 focus: profile?.focus ?? DiaryFocus(),
-                period: periodDescription,
+                period: requestedPeriod,
                 onPartial: { [weak self] partial in
                     Task { @MainActor in
                         guard let self, self.isGenerating else { return }
                         self.streamingInsight = partial
+                    }
+                },
+                onStatus: { [weak self] status in
+                    Task { @MainActor in
+                        guard let self, self.isGenerating else { return }
+                        self.isWaiting = status == .waiting
                     }
                 }
             )
             try Task.checkCancellation()
             let insight = Insight(
                 day: Date(),
-                generatedFrom: fromDate,
-                generatedTo: toDate,
+                generatedFrom: requestedFrom,
+                generatedTo: requestedTo,
                 promptText: generated.promptText,
                 text: generated.text
             )
@@ -96,6 +119,7 @@ final class InsightsViewModel: ObservableObject {
         } catch where error is CancellationError || error as? DiaryLanguageModelError == .aiDisabled {
             streamingInsight = ""
         } catch {
+            streamingInsight = ""
             // The model says why — no model downloaded, nothing in range —
             // and that is more use than a blanket apology.
             generationError = error.localizedDescription
@@ -107,5 +131,17 @@ final class InsightsViewModel: ObservableObject {
         let from = fromDate.formatted(.dateTime.day().month(.wide))
         let to = toDate.formatted(.dateTime.day().month(.wide))
         return from == to ? from : "\(from) to \(to)"
+    }
+
+    private static func earliestDate(
+        before date: Date,
+        model: SummaryModelID,
+        calendar: Calendar
+    ) -> Date {
+        calendar.date(
+            byAdding: .day,
+            value: -model.maximumInsightSpanDays,
+            to: date
+        ) ?? date
     }
 }

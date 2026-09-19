@@ -18,19 +18,19 @@ struct TangentTests {
         try await store.saveUserProfile(profile)
         #expect(try await store.userProfile(id: profileID)?.name == "Alex")
 
-        var prompt = Prompt(text: "How are you feeling?")
+        var prompt = Prompt(text: "What stood out today?")
         try await store.savePrompt(prompt)
-        prompt.text = "How have you felt today?"
+        prompt.text = "What mattered today?"
         try await store.savePrompt(prompt)
         #expect(try await store.prompt(id: prompt.id)?.text == prompt.text)
 
         var question = Question(
             profileID: profileID,
             promptText: "Question prompt for Alex",
-            text: "How was your energy?"
+            text: "What did you work on?"
         )
         try await store.saveQuestion(question)
-        question.text = "How was your energy today?"
+        question.text = "What did you work on today?"
         try await store.saveQuestion(question)
         #expect(try await store.questions(profileID: profileID) == [question])
 
@@ -41,7 +41,7 @@ struct TangentTests {
             promptText: "Diary prompt for Alex"
         )
         try await store.saveDiaryEntry(diary)
-        diary.summaryShort = "Energy was steady."
+        diary.summaryShort = "The afternoon was steady."
         try await store.saveDiaryEntry(diary)
         let savedDiary = try #require(
             await store.diaryEntry(id: diary.id)
@@ -58,7 +58,7 @@ struct TangentTests {
             text: "No trend yet."
         )
         try await store.saveInsight(insight)
-        insight.text = "Energy appears steady."
+        insight.text = "The afternoon looks steady."
         try await store.saveInsight(insight)
         #expect(try await store.insight(id: insight.id)?.text == insight.text)
 
@@ -165,7 +165,7 @@ struct TangentTests {
             id: entryID,
             profileID: profileID,
             day: Date(timeIntervalSince1970: 100),
-            questions: [DiaryQuestion(id: questionID, text: "Pain < 3 & improving")],
+            questions: [DiaryQuestion(id: questionID, text: "Notes < 3 & improving")],
             promptText: "Ask \"carefully\"",
             summaryShort: "Better",
             transcriptPath: "/private/tangent/audio.m4a"
@@ -180,7 +180,7 @@ struct TangentTests {
 
         #expect(xml.contains("profile-id=\"\(profileID.uuidString)\""))
         #expect(xml.contains("<entry id=\"\(entryID.uuidString)\">"))
-        #expect(xml.contains("<question id=\"\(questionID.uuidString)\">Pain &lt; 3 &amp; improving</question>"))
+        #expect(xml.contains("<question id=\"\(questionID.uuidString)\">Notes &lt; 3 &amp; improving</question>"))
         #expect(xml.contains("<prompt-text>Ask &quot;carefully&quot;</prompt-text>"))
         #expect(xml.contains("<summary-short>Better</summary-short>"))
         #expect(!xml.contains("summary-long"))
@@ -229,7 +229,7 @@ struct TangentTests {
     }
 
     @Test @MainActor
-    func insightsGenerationUsesAClampedFourteenDayRange() async throws {
+    func insightsGenerationUsesAModelSpecificLookback() async throws {
         let container = try TangentModelContainer.make(inMemory: true)
         let store = SwiftDataNoteStore(modelContext: container.mainContext)
         let calendar = testCalendar
@@ -249,6 +249,7 @@ struct TangentTests {
         let model = InsightsViewModel(
             noteStore: store,
             languageModel: StubDiaryLanguageModel(),
+            selectedModel: .medgemma4B,
             calendar: calendar,
             now: today
         )
@@ -262,7 +263,7 @@ struct TangentTests {
                 [.day],
                 from: model.fromDate,
                 to: model.toDate
-            ).day == 14
+            ).day == SummaryModelID.medgemma4B.maximumInsightSpanDays
         )
 
         await model.generateInsight()
@@ -271,7 +272,38 @@ struct TangentTests {
         // The range the user picked reaches the prompt, and the filled prompt
         // is what gets persisted.
         #expect(model.generatedInsight?.promptText.contains("18 September") == true)
+        #expect(model.generatedInsight?.promptText.contains("Creative projects") == true)
+        #expect(model.generatedInsight?.promptText.contains("Finding time") == true)
+        #expect(model.generatedInsight?.promptText.contains("context for what the writer may") == true)
         #expect(try await store.insights().count == 1)
+    }
+
+    @Test @MainActor
+    func insightLookbackFollowsTheSelectedModel() throws {
+        let container = try TangentModelContainer.make(inMemory: true)
+        let store = SwiftDataNoteStore(modelContext: container.mainContext)
+        let calendar = testCalendar
+        let today = try #require(
+            calendar.date(from: DateComponents(year: 2026, month: 9, day: 18))
+        )
+        let model = InsightsViewModel(
+            noteStore: store,
+            languageModel: StubDiaryLanguageModel(),
+            selectedModel: .qwen3_1_7B,
+            calendar: calendar,
+            now: today
+        )
+        #expect(
+            calendar.dateComponents([.day], from: model.fromDate, to: model.toDate).day == 42
+        )
+
+        let farBack = try #require(calendar.date(byAdding: .day, value: -40, to: today))
+        model.setFromDate(farBack)
+        model.setSelectedModel(.medgemma4B)
+        #expect(
+            calendar.dateComponents([.day], from: model.fromDate, to: model.toDate).day == 14
+        )
+        #expect(model.insightSpanDescription == "2 weeks")
     }
 
     @Test @MainActor
@@ -302,22 +334,22 @@ struct TangentTests {
             age: 29,
             weight: 68,
             gender: "Non-binary",
-            interests: ["Sleep", "Energy"],
-            concerns: ["Headaches"],
+            interests: ["Painting", "Guitar"],
+            concerns: ["Finding time"],
             email: "taylor@example.com"
         )
 
         let filled = PromptTemplate.dailyShortSummary.filled(
-            transcript: "  I slept badly and felt flat.  ",
+            transcript: "  I left my draft unfinished.  ",
             profile: profile
         )
 
         #expect(!filled.contains(PromptTemplate.transcriptPlaceholder))
         #expect(!filled.contains(PromptTemplate.profilePlaceholder))
-        #expect(filled.contains("TRANSCRIPT: I slept badly and felt flat."))
+        #expect(filled.contains("TRANSCRIPT: I left my draft unfinished."))
         #expect(!filled.contains("Age: 29"))
         #expect(!filled.contains("Weight: 68 kg"))
-        #expect(filled.contains("Interests: Sleep; Energy"))
+        #expect(filled.contains("Interests: Painting; Guitar"))
         // Contact details are not model inputs.
         #expect(!filled.contains("taylor@example.com"))
     }
@@ -327,10 +359,10 @@ struct TangentTests {
         let profileID = UUID()
         let entries = [
             DiaryEntry(profileID: profileID, day: Date(timeIntervalSince1970: 200),
-                       promptText: "PRIVATE PROMPT", summaryShort: "  I had knee pain.  ",
+                       promptText: "PRIVATE PROMPT", summaryShort: "  I finished a sketch.  ",
                        transcriptPath: "/private/transcript.txt"),
             DiaryEntry(profileID: profileID, day: Date(timeIntervalSince1970: 100),
-                       promptText: "PRIVATE PROMPT", summaryShort: "I slept poorly."),
+                       promptText: "PRIVATE PROMPT", summaryShort: "I started a new chapter."),
             DiaryEntry(profileID: profileID, day: Date(timeIntervalSince1970: 300),
                        promptText: "PRIVATE PROMPT", summaryShort: " \n ",
                        transcriptPath: "/private/unsummarised.txt")
@@ -338,16 +370,29 @@ struct TangentTests {
         let summaries = entries.compactMap(DiarySummary.init)
         #expect(summaries.count == 2)
         let filled = PromptTemplate.weeklyInsights.filled(
-            period: "7 to 13 September", summaries: summaries
+            period: "7 to 13 September",
+            summaries: summaries,
+            focus: DiaryFocus(interests: ["Painting"], concerns: ["Finding time"])
         )
         #expect(!filled.contains(PromptTemplate.periodPlaceholder))
         #expect(!filled.contains(PromptTemplate.dailySummariesPlaceholder))
         #expect(filled.contains("NOTES (7 to 13 September):"))
+        #expect(filled.contains("Interests: Painting"))
+        #expect(filled.contains("Concerns: Finding time"))
+        #expect(filled.contains("context for what the writer may"))
+        #expect(filled.contains("If none"))
+        #expect(filled.contains("Look back over the dated short summaries"))
         #expect(!filled.contains("PRIVATE PROMPT"))
         #expect(!filled.contains("/private/"))
-        let earlier = try #require(filled.range(of: "I slept poorly."))
-        let later = try #require(filled.range(of: "I had knee pain."))
+        let earlier = try #require(filled.range(of: "I started a new chapter."))
+        let later = try #require(filled.range(of: "I finished a sketch."))
         #expect(earlier.lowerBound < later.lowerBound)
+
+        let withoutFocus = PromptTemplate.weeklyInsights.filled(
+            period: "7 to 13 September", summaries: summaries
+        )
+        #expect(withoutFocus.contains("No interests or concerns specified."))
+        #expect(withoutFocus.contains("draw insights only from the summaries"))
     }
 
     @Test @MainActor
@@ -434,35 +479,18 @@ struct TangentTests {
     }
 
     @Test @MainActor
-    func promptSeederRemovesRetiredTemplateAndKeepsCustomPrompts() async throws {
+    func promptSeederKeepsCustomPromptsWhenSeeding() async throws {
         let container = try TangentModelContainer.make(inMemory: true)
         let context = container.mainContext
-        let retired = PromptTemplate(
-            text: """
-            You are a helpful medical assistant. You are summarising one entry in a private
-            voice diary.
-
-            Each sentence should be a single fact from the transcript. It should be in passive voice.\u{20}
-            Always refer to the user.
-
-            Use the profile below to judge what to foreground. Do not treat anything in it
-            as something said in this entry.
-
-            USER PROFILE: {user_profile}
-
-            TRANSCRIPT: {transcript}
-            """
-        )
-
-        context.insert(PromptRecord(prompt: Prompt(text: retired.text)))
         context.insert(PromptRecord(prompt: Prompt(text: "My custom prompt")))
         try context.save()
         try PromptSeeder.seedPrompts(in: context)
         try PromptSeeder.seedPrompts(in: context)
         let texts = try context.fetch(FetchDescriptor<PromptRecord>()).map(\.text)
         #expect(texts.count == 3)
-        #expect(!texts.contains(retired.text))
         #expect(texts.contains("My custom prompt"))
+        #expect(texts.contains(PromptTemplate.dailyShortSummary.text))
+        #expect(texts.contains(PromptTemplate.weeklyInsights.text))
     }
 
     @Test @MainActor
@@ -523,8 +551,8 @@ struct TangentTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         let url = directory.appending(path: "diary.store")
         let entry = DiaryEntry(profileID: UUID(), day: Date(),
-                               questions: [DiaryQuestion(text: "How did you sleep?")],
-                               promptText: "Original short prompt", summaryShort: "I slept well.",
+                               questions: [DiaryQuestion(text: "What stood out to you today?")],
+                               promptText: "Original short prompt", summaryShort: "I finished a sketch.",
                                transcriptPath: "/private/original.txt")
         try autoreleasepool {
             let schema = Schema(TangentSchemaV0.models)
@@ -580,7 +608,7 @@ struct TangentTests {
         #expect(prompt.contains("Painting; Learning Spanish"))
         #expect(prompt.contains("Finishing my project"))
         #expect(prompt.contains("I finished a sketch."))
-        #expect(!prompt.contains("medical assistant"))
+        #expect(prompt.contains("context for what the writer may"))
     }
 
     @Test @MainActor
@@ -598,7 +626,7 @@ struct TangentTests {
             // Reproduce the unversioned database written by the previous app.
             let schema = Schema(TangentSchemaV1.models)
             let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, url: url)])
-            container.mainContext.insert(TangentSchemaV1.PatientProfileRecord(profile: profile))
+            container.mainContext.insert(TangentSchemaV1.UserProfileRecord(profile: profile))
             container.mainContext.insert(TangentSchemaV1.DiaryEntryRecord(entry: entry))
             container.mainContext.insert(TangentSchemaV1.QuestionRecord(question: question))
             try container.mainContext.save()
@@ -625,6 +653,17 @@ struct TangentTests {
         #expect(!SummaryModelID.gemma3_1B.disablesThinking)
         #expect(SummaryModelID(rawValue: "gemma3-1b-qat-4bit") == .gemma3_1B)
         #expect(SummaryModelID(rawValue: "medgemma-1.5-4b-it-4bit") == .medgemma4B)
+        #expect(SummaryModelID.qwen2_5_0_5B.contextWindowTokens == 32_768)
+        #expect(SummaryModelID.qwen3_0_6B.contextWindowTokens == 40_960)
+        #expect(SummaryModelID.qwen3_1_7B.contextWindowTokens == 40_960)
+        #expect(SummaryModelID.gemma3_1B.contextWindowTokens == 32_768)
+        #expect(SummaryModelID.medgemma4B.contextWindowTokens == 131_072)
+        #expect(SummaryModelID.qwen2_5_0_5B.maximumInsightSpanDays == 21)
+        #expect(SummaryModelID.qwen3_0_6B.maximumInsightSpanDays == 28)
+        #expect(SummaryModelID.gemma3_1B.maximumInsightSpanDays == 28)
+        #expect(SummaryModelID.qwen3_1_7B.maximumInsightSpanDays == 42)
+        #expect(SummaryModelID.medgemma4B.maximumInsightSpanDays == 14)
+        #expect(SummaryModelID.medgemma4B.maximumInsightSpanDays < SummaryModelID.qwen3_1_7B.maximumInsightSpanDays)
     }
 
     private var testCalendar: Calendar {

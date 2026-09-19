@@ -1,35 +1,34 @@
 import Foundation
 import SwiftData
 
-// Frozen schemas keep existing installations readable as storage names evolve.
-// Legacy terminology is confined to migration code and never used by features.
+// On-device storage schemas. Equivalent versions share the same schema.
 enum TangentSchemaV1: VersionedSchema {
     static var versionIdentifier = Schema.Version(1, 0, 0)
     static var models: [any PersistentModel.Type] {
-        [PatientProfileRecord.self, PromptRecord.self, QuestionRecord.self,
+        [UserProfileRecord.self, PromptRecord.self, QuestionRecord.self,
          DiaryEntryRecord.self, InsightRecord.self]
     }
 
     @Model
-    final class PatientProfileRecord {
+    final class UserProfileRecord {
         @Attribute(.unique) var id: UUID
         var name: String
         var age: Int?
         var weight: Double?
         var gender: String
-        private var healthInterestsData: Data?
-        private var healthConcernsData: Data?
+        private var interestsData: Data?
+        private var concernsData: Data?
         var email: String
         var dailyReminder: Date?
 
-        var healthInterests: [String] {
-            get { StringArrayStorage.decode(healthInterestsData) }
-            set { healthInterestsData = StringArrayStorage.encode(newValue) }
+        var interests: [String] {
+            get { StringArrayStorage.decode(interestsData) }
+            set { interestsData = StringArrayStorage.encode(newValue) }
         }
 
-        var healthConcerns: [String] {
-            get { StringArrayStorage.decode(healthConcernsData) }
-            set { healthConcernsData = StringArrayStorage.encode(newValue) }
+        var concerns: [String] {
+            get { StringArrayStorage.decode(concernsData) }
+            set { concernsData = StringArrayStorage.encode(newValue) }
         }
 
         init(profile: UserProfile) {
@@ -38,8 +37,8 @@ enum TangentSchemaV1: VersionedSchema {
             age = profile.age
             weight = profile.weight
             gender = profile.gender
-            healthInterestsData = StringArrayStorage.encode(profile.interests)
-            healthConcernsData = StringArrayStorage.encode(profile.concerns)
+            interestsData = StringArrayStorage.encode(profile.interests)
+            concernsData = StringArrayStorage.encode(profile.concerns)
             email = profile.email
             dailyReminder = profile.dailyReminder
         }
@@ -49,8 +48,8 @@ enum TangentSchemaV1: VersionedSchema {
             age = profile.age
             weight = profile.weight
             gender = profile.gender
-            healthInterests = profile.interests
-            healthConcerns = profile.concerns
+            interests = profile.interests
+            concerns = profile.concerns
             email = profile.email
             dailyReminder = profile.dailyReminder
         }
@@ -62,8 +61,8 @@ enum TangentSchemaV1: VersionedSchema {
                 age: age,
                 weight: weight,
                 gender: gender,
-                interests: healthInterests,
-                concerns: healthConcerns,
+                interests: interests,
+                concerns: concerns,
                 email: email,
                 dailyReminder: dailyReminder
             )
@@ -99,19 +98,19 @@ enum TangentSchemaV1: VersionedSchema {
     @Model
     final class QuestionRecord {
         @Attribute(.unique) var id: UUID
-        var patientID: UUID
+        var profileID: UUID
         var promptText: String
         var text: String
 
         init(question: Question) {
             id = question.id
-            patientID = question.profileID
+            profileID = question.profileID
             promptText = question.promptText
             text = question.text
         }
 
         func update(from question: Question) {
-            patientID = question.profileID
+            profileID = question.profileID
             promptText = question.promptText
             text = question.text
         }
@@ -119,7 +118,7 @@ enum TangentSchemaV1: VersionedSchema {
         var domainModel: Question {
             Question(
                 id: id,
-                profileID: patientID,
+                profileID: profileID,
                 promptText: promptText,
                 text: text
             )
@@ -129,7 +128,7 @@ enum TangentSchemaV1: VersionedSchema {
     @Model
     final class DiaryEntryRecord {
         @Attribute(.unique) var id: UUID
-        var patientID: UUID
+        var profileID: UUID
         var day: Date
         var questions: [DiaryQuestion]
         var promptText: String
@@ -138,7 +137,7 @@ enum TangentSchemaV1: VersionedSchema {
 
         init(entry: DiaryEntry) {
             id = entry.id
-            patientID = entry.profileID
+            profileID = entry.profileID
             day = entry.day
             questions = entry.questions
             promptText = entry.promptText
@@ -147,7 +146,7 @@ enum TangentSchemaV1: VersionedSchema {
         }
 
         func update(from entry: DiaryEntry) {
-            patientID = entry.profileID
+            profileID = entry.profileID
             day = entry.day
             questions = entry.questions
             promptText = entry.promptText
@@ -158,7 +157,7 @@ enum TangentSchemaV1: VersionedSchema {
         var domainModel: DiaryEntry {
             DiaryEntry(
                 id: id,
-                profileID: patientID,
+                profileID: profileID,
                 day: day,
                 questions: questions,
                 promptText: promptText,
@@ -211,14 +210,14 @@ enum TangentSchemaV1: VersionedSchema {
 enum TangentSchemaV0: VersionedSchema {
     static var versionIdentifier = Schema.Version(0, 9, 0)
     static var models: [any PersistentModel.Type] {
-        [TangentSchemaV1.PatientProfileRecord.self, TangentSchemaV1.PromptRecord.self,
+        [TangentSchemaV1.UserProfileRecord.self, TangentSchemaV1.PromptRecord.self,
          TangentSchemaV1.QuestionRecord.self, DiaryEntryRecord.self, TangentSchemaV1.InsightRecord.self]
     }
 
     @Model
     final class DiaryEntryRecord {
         @Attribute(.unique) var id: UUID
-        var patientID: UUID
+        var profileID: UUID
         var day: Date
         var questions: [DiaryQuestion]
         var promptText: String
@@ -228,7 +227,7 @@ enum TangentSchemaV0: VersionedSchema {
 
         init(entry: DiaryEntry) {
             id = entry.id
-            patientID = entry.profileID
+            profileID = entry.profileID
             day = entry.day
             questions = entry.questions
             promptText = entry.promptText
@@ -236,13 +235,6 @@ enum TangentSchemaV0: VersionedSchema {
             summaryLong = ""
             transcriptPath = entry.transcriptPath
         }
-    }
-}
-
-enum TangentSchemaV2: VersionedSchema {
-    static var versionIdentifier = Schema.Version(2, 0, 0)
-    static var models: [any PersistentModel.Type] {
-        TangentSchemaV3.models + [TangentSchemaV1.PatientProfileRecord.self]
     }
 }
 
@@ -255,47 +247,13 @@ enum TangentSchemaV3: VersionedSchema {
 }
 
 enum TangentMigrationPlan: SchemaMigrationPlan {
-    private static let legacyQuestionTexts = [
-        "How did you sleep last night?",
-        "How stressed have you felt today, from 1 to 10?",
-        "How has your knee been feeling today?",
-        "Did you get any exercise today?",
-        "What did you eat and drink today?",
-        "How has your mood been today?",
-        "Did you have any takeaways or late-night snacks today?",
-        "Is there anything else about your health you'd like to mention?",
-    ]
-
     static var schemas: [any VersionedSchema.Type] {
-        [TangentSchemaV0.self, TangentSchemaV1.self, TangentSchemaV2.self, TangentSchemaV3.self]
+        [TangentSchemaV0.self, TangentSchemaV3.self]
     }
 
     static var stages: [MigrationStage] {
         [
-            .lightweight(fromVersion: TangentSchemaV0.self, toVersion: TangentSchemaV1.self),
-            .custom(fromVersion: TangentSchemaV1.self, toVersion: TangentSchemaV2.self,
-                    willMigrate: nil, didMigrate: { context in
-                let profiles = try context.fetch(FetchDescriptor<TangentSchemaV1.PatientProfileRecord>())
-                for profile in profiles {
-                    context.insert(UserProfileRecord(profile: profile.domainModel))
-                    context.delete(profile)
-                }
-                // Replace only the old built-in questionnaire, preserving custom questions.
-                let questions = try context.fetch(FetchDescriptor<QuestionRecord>())
-                for profileID in Set(questions.map(\.profileID)) {
-                    let stored = questions.filter { $0.profileID == profileID }
-                    if Set(stored.map(\.text)) == Set(legacyQuestionTexts) {
-                        stored.forEach { context.delete($0) }
-                        for text in ProfileSeeder.questionTexts {
-                            context.insert(QuestionRecord(question: Question(
-                                profileID: profileID, promptText: "", text: text
-                            )))
-                        }
-                    }
-                }
-                try context.save()
-            }),
-            .lightweight(fromVersion: TangentSchemaV2.self, toVersion: TangentSchemaV3.self)
+            .lightweight(fromVersion: TangentSchemaV0.self, toVersion: TangentSchemaV3.self)
         ]
     }
 }

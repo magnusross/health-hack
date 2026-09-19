@@ -14,6 +14,9 @@ import Tokenizers
 /// so the loaded model has one owner.
 actor MLXDiaryLanguageModel: DiaryLanguageModel {
     /// Read with: log stream --device --predicate 'subsystem == "Personal.Tangent"'
+    private let resources = ModelResourceGuard()
+    private var isGenerating = false
+
     private static let log = Logger(subsystem: "Personal.Tangent", category: "Summary")
 
     /// The one resident model. 0.8 GB and 2.5 GB together will get the app
@@ -27,8 +30,12 @@ actor MLXDiaryLanguageModel: DiaryLanguageModel {
     /// have to wait for weights to come off disk.
     func prepare() async {
         let model = SelectedModelStore.selected
-        guard ModelStorage.isDownloaded(model) else { return }
-        _ = try? await container(for: model)
+        guard !isGenerating, ModelStorage.isDownloaded(model) else { return }
+        do {
+            _ = try await resources.monitoring { try await self.container(for: model) }
+        } catch {
+            releaseModel()
+        }
     }
 
     func generateShortSummary(
@@ -36,14 +43,24 @@ actor MLXDiaryLanguageModel: DiaryLanguageModel {
         profile: UserProfile,
         onPartial: (@Sendable (String) -> Void)?
     ) async throws -> GeneratedText {
-        return try await generate(
-            using: .dailyShortSummary,
-            transcript: transcript,
-            profile: profile,
-            maxTokens: 120,
-            label: "short",
-            onPartial: onPartial
-        )
+        guard !isGenerating else { throw ModelResourceError.busy }
+        isGenerating = true
+        defer { isGenerating = false }
+        do {
+            return try await resources.monitoring {
+                try await self.generate(
+                    using: .dailyShortSummary,
+                    transcript: transcript,
+                    profile: profile,
+                    maxTokens: 120,
+                    label: "short",
+                    onPartial: onPartial
+                )
+            }
+        } catch {
+            releaseModel()
+            throw error
+        }
     }
 
     /// Generates insights using saved short summaries only.
@@ -51,6 +68,23 @@ actor MLXDiaryLanguageModel: DiaryLanguageModel {
         from summaries: [DiarySummary],
         focus: DiaryFocus,
         period: String,
+        onPartial: (@Sendable (String) -> Void)?
+    ) async throws -> GeneratedText {
+        guard !isGenerating else { throw ModelResourceError.busy }
+        isGenerating = true
+        defer { isGenerating = false }
+        do {
+            return try await resources.monitoring {
+                try await self.insights(from: summaries, focus: focus, period: period, onPartial: onPartial)
+            }
+        } catch {
+            releaseModel()
+            throw error
+        }
+    }
+
+    private func insights(
+        from summaries: [DiarySummary], focus: DiaryFocus, period: String,
         onPartial: (@Sendable (String) -> Void)?
     ) async throws -> GeneratedText {
         guard !summaries.isEmpty else {
@@ -139,48 +173,77 @@ actor MLXDiaryLanguageModel: DiaryLanguageModel {
         try Task.checkCancellation()
         // Near-deterministic: this is a record of what the user said, not a
         // piece of writing that benefits from variety.
-        let parameters = GenerateParameters(maxTokens: maxTokens, temperature: 0.2)
+        try resources.checkGeneration(inputTokens: 0, outputTokens: maxTokens)
+        let parameters = GenerateParameters(maxTokens: maxTokens, temperature: 0.2, prefillStepSize: 128)
 
-        // container.generate holds the model exclusively for the prefill and
-        // releases it to decode. Consuming the stream inside container.perform
-        // instead would hold it for the whole run, which is how one summary
-        // came to block every other.
+        let resources = self.resources
+        var output = ""
+        var info: GenerateCompletionInfo?
         #if TANGENT_LEGACY_MLX
-        let stream = try await container.perform { context in
+        // MLX 2.x exposes no producer task to await. Run its callback API on
+        // the model executor so cancellation finishes GPU work before returning.
+        let result = try await container.perform { context in
             let input = try await context.processor.prepare(input: UserInput(
                 prompt: prompt,
                 additionalContext: model.disablesThinking ? ["enable_thinking": false] : nil
             ))
+            try resources.checkGeneration(inputTokens: input.text.tokens.size, outputTokens: maxTokens)
             try Task.checkCancellation()
-            return try MLXLMCommon.generate(input: input, parameters: parameters, context: context)
-        }
-        #else
-        let input = try await container.prepare(input: UserInput(
-            prompt: prompt,
-            additionalContext: model.disablesThinking ? ["enable_thinking": false] : nil
-        ))
-        try Task.checkCancellation()
-        let stream = try await container.generate(input: input, parameters: parameters)
-        #endif
-
-        var output = ""
-        var reported = ""
-        var info: GenerateCompletionInfo?
-        for await generation in stream {
-            if Task.isCancelled { break }
-            if let completion = generation.info { info = completion }
-            guard let chunk = generation.chunk else { continue }
-            output += chunk
-
-            // Every token is part of the summary now, so it goes straight to
-            // the screen — no structure to wait for.
-            guard let onPartial else { continue }
-            let partial = SummaryText.clean(output)
-            if partial != reported {
-                reported = partial
-                onPartial(partial)
+            var text = ""
+            var failure: Error?
+            var detokenizer = NaiveStreamingDetokenizer(tokenizer: context.tokenizer)
+            let completion = try MLXLMCommon.generate(input: input, parameters: parameters, context: context) { (token: Int) in
+                if Task.isCancelled { return .stop }
+                do { try resources.checkMemory() }
+                catch { failure = error; return .stop }
+                detokenizer.append(token: token)
+                if let chunk = detokenizer.next() {
+                    text += chunk
+                    onPartial?(SummaryText.clean(text))
+                }
+                return .more
             }
+            if let failure { throw failure }
+            try Task.checkCancellation()
+            return (text, completion)
         }
+        output = result.0
+        info = result.1
+        #else
+        let (stream, producer) = try await container.perform { context in
+            let input = try await context.processor.prepare(input: UserInput(
+                prompt: prompt,
+                additionalContext: model.disablesThinking ? ["enable_thinking": false] : nil
+            ))
+            try resources.checkGeneration(inputTokens: input.text.tokens.size, outputTokens: maxTokens)
+            try Task.checkCancellation()
+            let iterator = try TokenIterator(input: input, model: context.model, parameters: parameters)
+            return MLXLMCommon.generateTask(
+                promptTokenCount: input.text.tokens.size,
+                modelConfiguration: context.configuration,
+                tokenizer: context.tokenizer,
+                iterator: iterator
+            )
+        }
+        do {
+            for await generation in stream {
+                try Task.checkCancellation()
+                try resources.checkMemory()
+                if let completion = generation.info { info = completion }
+                if let chunk = generation.chunk {
+                    output += chunk
+                    onPartial?(SummaryText.clean(output))
+                }
+            }
+        } catch {
+            producer.cancel()
+            await producer.value
+            throw error
+        }
+        // Ending an AsyncStream does not mean its GPU producer has stopped.
+        if Task.isCancelled { producer.cancel() }
+        await producer.value
+        #endif
 
         if let info {
             #if TANGENT_LEGACY_MLX
@@ -204,6 +267,15 @@ actor MLXDiaryLanguageModel: DiaryLanguageModel {
         return output
     }
 
+    private func releaseModel() {
+        loaded = nil
+        #if TANGENT_LEGACY_MLX
+        GPU.clearCache()
+        #else
+        Memory.clearCache()
+        #endif
+    }
+
     private func container(for model: SummaryModelID) async throws -> ModelContainer {
         if let loaded, loaded.model == model {
             return loaded.container
@@ -216,14 +288,15 @@ actor MLXDiaryLanguageModel: DiaryLanguageModel {
         if let loading, loading.model == model {
             return try await loading.task.value
         }
-        loading?.task.cancel()
+        guard loading == nil else { throw ModelResourceError.busy }
 
         #if TANGENT_LEGACY_MLX
         GPU.set(cacheLimit: 20 * 1024 * 1024)
         #else
         Memory.cacheLimit = 20 * 1024 * 1024
         #endif
-        loaded = nil
+        releaseModel()
+        try resources.checkLoad(weightBytes: max(model.approximateDownloadBytes, ModelStorage.bytesOnDisk(model)))
 
         let task = Task<ModelContainer, Error> {
             #if TANGENT_LEGACY_MLX
@@ -248,7 +321,12 @@ actor MLXDiaryLanguageModel: DiaryLanguageModel {
 
         do {
             let started = Date()
-            let container = try await task.value
+            let container = try await withTaskCancellationHandler {
+                try await task.value
+            } onCancel: {
+                task.cancel()
+            }
+            try Task.checkCancellation()
             loaded = (model, container)
             Self.log.notice(
                 "loaded \(model.displayName, privacy: .public) in \(Date().timeIntervalSince(started), format: .fixed(precision: 1))s"

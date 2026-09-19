@@ -90,7 +90,7 @@ final class PromptRecord {
 @Model
 final class QuestionRecord {
     @Attribute(.unique) var id: UUID
-    @Attribute(originalName: "patientID") var profileID: UUID
+    var profileID: UUID
     var promptText: String
     var text: String
 
@@ -120,7 +120,7 @@ final class QuestionRecord {
 @Model
 final class DiaryEntryRecord {
     @Attribute(.unique) var id: UUID
-    @Attribute(originalName: "patientID") var profileID: UUID
+    var profileID: UUID
     var day: Date
     var questions: [DiaryQuestion]
     var promptText: String

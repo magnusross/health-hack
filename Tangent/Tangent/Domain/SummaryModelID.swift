@@ -61,5 +61,39 @@ enum SummaryModelID: String, CaseIterable, Identifiable, Sendable {
         self == .qwen3_0_6B || self == .qwen3_1_7B
     }
 
+    /// Official context window from the MLX model config, in tokens.
+    var contextWindowTokens: Int {
+        switch self {
+        case .qwen3_0_6B, .qwen3_1_7B: 40_960
+        case .qwen2_5_0_5B, .gemma3_1B: 32_768
+        case .medgemma4B: 131_072
+        }
+    }
+
+    /// How far Insights may look back from the selected end date.
+    ///
+    /// Official windows are 32K–128K tokens, but on-device generation is capped
+    /// at 4,096 input tokens. These spans keep a list of one-sentence summaries
+    /// comfortably inside that budget. The largest model stays at two weeks
+    /// because its weights leave the least room for KV cache.
+    var maximumInsightSpanDays: Int {
+        switch self {
+        case .qwen2_5_0_5B: 21
+        case .qwen3_0_6B, .gemma3_1B: 28
+        case .qwen3_1_7B: 42
+        case .medgemma4B: 14
+        }
+    }
+
+    var insightSpanDescription: String {
+        switch maximumInsightSpanDays {
+        case 14: "2 weeks"
+        case 21: "3 weeks"
+        case 28: "4 weeks"
+        case 42: "6 weeks"
+        default: "\(maximumInsightSpanDays) days"
+        }
+    }
+
     static let `default`: SummaryModelID = .qwen3_0_6B
 }

@@ -37,25 +37,25 @@ background second generation task. Transcripts remain available in daily details
 
 `InsightsViewModel` filters entries by the selected date range and converts
 nonempty short summaries to `DiarySummary` values. The language-model service
-receives only dates and summary text. `PromptTemplate` orders these by date
-and builds the insights prompt; neither transcripts nor user profiles are
-inputs to insight generation. Entries without summaries are skipped.
+receives dates, summary text, and the user's interests and concerns.
+`PromptTemplate` orders the summaries by date and asks for trends in that
+range. Interests and concerns are optional context for what the writer may
+want to hear about; they are not required. Transcripts are not inputs.
+Entries without summaries are skipped.
+The From/To range is capped per selected model: Qwen2.5 0.5B looks back 3 weeks,
+Qwen3 0.6B and Gemma 3 1B 4 weeks, Qwen3 1.7B 6 weeks, and MedGemma 1.5 4B
+2 weeks. Official context windows are 32K–128K tokens; on-device generation
+stays inside the 4,096-input-token budget, and the largest model keeps the
+shortest span because of memory.
 
 `MLXDiaryLanguageModel` holds one loaded model. `MLXModelCatalog` downloads
 weights to Application Support when requested in Settings. Diary content and
 inference stay on the device; network access is used to download model weights.
 
-The current diary schema stores `summaryShort` only. `TangentMigrationPlan`
-keeps frozen schemas for existing databases, copies profiles to `UserProfileRecord`
-while preserving their IDs, renames profile references, and removes obsolete
-storage. Legacy terminology is limited to these migration definitions and
-attribute rename annotations. Migration tests check preserved data and links.
-`PromptSeeder` removes exact obsolete built-in templates while preserving custom
-prompts. `ProfileSeeder` creates a neutral profile once and never resets user edits.
+The diary stores one short summary per entry. `ProfileSeeder` creates a profile
+and the default prompts without resetting user edits.
 
-Settings edits the user's name, interests, and concerns. Demographic fields from
-older profiles are preserved for compatibility but are not shown or sent to models.
-The model catalog offers Qwen3 0.6B, Qwen2.5 0.5B, Qwen3 1.7B, Gemma 3 1B,
+Settings edits the user's name, interests, and concerns. The model catalog offers Qwen3 0.6B, Qwen2.5 0.5B, Qwen3 1.7B, Gemma 3 1B,
 and MedGemma 1.5 4B. Qwen3 uses its tokenizer's non-thinking mode. Model choice
 is stored separately from diary data, so switching does not change diary entries.
 
@@ -65,3 +65,18 @@ Keep persistence models and `ModelContext` in `Data`. Inject domain protocols
 through `AppDependencies`; views and view models must not import SwiftData or
 MLX to implement a workflow. Add tests for persistence changes and feature
 behaviour in the existing test targets.
+
+`ModelResourceGuard` checks user-initiated downloads using Apple's volume capacity
+API and declares its disk-space reason in `PrivacyInfo.xcprivacy`. Loading reserves
+twice the larger of actual/estimated weight bytes plus 768 MiB. Generation reserves
+768 MiB plus 160 KiB per input/output token, with a 4,096-input-token limit and
+128-token prefill batches. These are conservative estimates, not measured guarantees.
+A monitor checks app-available memory every 200 ms and system memory-pressure signals;
+downloads check remaining storage every second. Failures cancel work, discard partial
+output, release model/cache memory, and surface actionable messages through existing UI.
+Capacity checks use injected readings in tests; device capacity never leaves the app.
+
+`OptionalAIService` routes warmup, summaries, and insights through one FIFO
+`ModelOperationQueue`. The lease remains held across every await until work has
+finished or finished cancelling. Queued requests report waiting/running status;
+turning AI off cancels both active and queued requests. Downloads are independent.

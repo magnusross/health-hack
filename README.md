@@ -72,6 +72,13 @@ This hardware baseline follows the SIMD matrix operations used by MLX and
 Apple lists A14 in [iPhone 12](https://support.apple.com/en-us/111876) and A15 in
 [iPhone SE (3rd generation)](https://support.apple.com/en-gb/111866).
 It is not a claim that every model has been tested on every compatible device.
+Downloads check available storage with room for temporary copies and other active
+downloads. Model loading and generation check the app's current available memory;
+low memory or system memory pressure stops model work and displays a warning.
+Summaries and insights share one queue and never run together; queued requests
+show “Waiting for model…”. Turning AI off cancels pending work too.
+These conservative estimates reduce risk but cannot guarantee that iOS will never
+terminate the app. Inputs over 4,096 tokens are rejected rather than silently truncated.
 
 These are supported 4-bit MLX models. Download size is not total runtime memory;
 performance depends on the device and input length. Qwen3 thinking mode is
@@ -90,5 +97,5 @@ Run **Product → Test** in Xcode, or test the project helper with:
 python3 -m unittest discover -s scripts -p 'test_*.py'
 ```
 
-App tests cover diary persistence and migration, summary generation flow, insights,
+App tests cover diary persistence, summary generation flow, insights,
 and export. Model inference needs separate validation on a physical device.

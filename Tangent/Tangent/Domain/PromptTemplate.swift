@@ -63,18 +63,20 @@ extension PromptTemplate {
 
     static let weeklyInsights = PromptTemplate(
         text: """
-        Help the writer reflect on the dated short summaries below. Write up to five
-        brief insights, addressing the writer as "you", in clear everyday language.
-        Return only the insights.
+        Write up to five brief insights, addressing the writer as "you", in clear
+        everyday language. Return only the insights.
 
-        Notice recurring themes, changes, progress, or difficulties in whatever
-        topics the writer discusses. Use their interests and concerns to prioritise
-        relevant observations, without forcing a connection that the summaries
-        do not support. Do not assume this diary is about any particular subject.
+        Look back over the dated short summaries and notice trends, recurring
+        themes, changes, progress, or difficulties. Use the summaries as the
+        only evidence.
 
-        Every observation must be supported by the short summaries. Interests and
-        concerns are context, not events. Do not invent events, reasons, or trends.
-        When there is too little evidence for a pattern, say so briefly.
+        Interests and concerns, when listed, are context for what the writer may
+        want to hear about. Prefer observations that speak to them when the
+        summaries support that, but still report other clear patterns. If none
+        are listed, draw insights only from the summaries.
+
+        Do not invent events, reasons, or trends, and do not treat interests or
+        concerns as things that happened in this period.
 
         INTERESTS AND CONCERNS: {user_profile}
 

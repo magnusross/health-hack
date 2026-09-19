@@ -59,7 +59,7 @@ final class TangentUITests: XCTestCase {
         app.buttons["complete-onboarding"].tap()
         app.buttons["Settings"].tap()
         XCTAssertTrue(app.textFields["profile-name"].waitForExistence(timeout: 3))
-        XCTAssertFalse(app.staticTexts["Health context"].exists)
+        XCTAssertTrue(app.staticTexts["Your focus"].exists)
         let interests = app.descendants(matching: .any).matching(identifier: "profile-interests").firstMatch
         XCTAssertTrue(interests.exists)
         interests.tap()

@@ -4,6 +4,7 @@ import Foundation
 /// Gates every model entry point, including calls already in progress when AI is disabled.
 @MainActor
 final class OptionalAIService: DiaryLanguageModel, ModelCatalog {
+    private let queue = ModelOperationQueue()
     private let preferences: AppPreferences
     private let languageModel: any DiaryLanguageModel
     private let catalog: any ModelCatalog
@@ -24,18 +25,32 @@ final class OptionalAIService: DiaryLanguageModel, ModelCatalog {
     }
 
     func prepare() async {
-        try? await run { [languageModel] in await languageModel.prepare() }
+        try? await run { [languageModel, queue] in
+            try await queue.perform {
+                await languageModel.prepare()
+            }
+        }
     }
 
     func generateShortSummary(
         transcript: String, profile: UserProfile,
         onPartial: (@Sendable (String) -> Void)?
     ) async throws -> GeneratedText {
+        try await generateShortSummary(transcript: transcript, profile: profile, onPartial: onPartial, onStatus: nil)
+    }
+
+    func generateShortSummary(
+        transcript: String, profile: UserProfile,
+        onPartial: (@Sendable (String) -> Void)?,
+        onStatus: (@Sendable (ModelGenerationStatus) -> Void)?
+    ) async throws -> GeneratedText {
         try await requireDownloadedModel()
-        return try await run { [languageModel] in
-            try await languageModel.generateShortSummary(
-                transcript: transcript, profile: profile, onPartial: onPartial
-            )
+        return try await run { [languageModel, queue] in
+            try await queue.perform(onStatus: onStatus) {
+                try await languageModel.generateShortSummary(
+                    transcript: transcript, profile: profile, onPartial: onPartial
+                )
+            }
         }
     }
 
@@ -43,11 +58,21 @@ final class OptionalAIService: DiaryLanguageModel, ModelCatalog {
         from summaries: [DiarySummary], focus: DiaryFocus, period: String,
         onPartial: (@Sendable (String) -> Void)?
     ) async throws -> GeneratedText {
+        try await generateInsights(from: summaries, focus: focus, period: period, onPartial: onPartial, onStatus: nil)
+    }
+
+    func generateInsights(
+        from summaries: [DiarySummary], focus: DiaryFocus, period: String,
+        onPartial: (@Sendable (String) -> Void)?,
+        onStatus: (@Sendable (ModelGenerationStatus) -> Void)?
+    ) async throws -> GeneratedText {
         try await requireDownloadedModel()
-        return try await run { [languageModel] in
-            try await languageModel.generateInsights(
-                from: summaries, focus: focus, period: period, onPartial: onPartial
-            )
+        return try await run { [languageModel, queue] in
+            try await queue.perform(onStatus: onStatus) {
+                try await languageModel.generateInsights(
+                    from: summaries, focus: focus, period: period, onPartial: onPartial
+                )
+            }
         }
     }
 
@@ -99,6 +124,53 @@ final class OptionalAIService: DiaryLanguageModel, ModelCatalog {
             return value
         } onCancel: {
             task.cancel()
+        }
+    }
+}
+
+/// Actor reentrancy alone does not serialize asynchronous inference. A lease spans
+/// every suspension until the current operation actually finishes cancelling.
+actor ModelOperationQueue {
+    private var activeID: UUID?
+    private var waiting: [(id: UUID, continuation: CheckedContinuation<Void, Error>)] = []
+
+    func perform<Value: Sendable>(
+        onStatus: (@Sendable (ModelGenerationStatus) -> Void)? = nil,
+        operation: @escaping @Sendable () async throws -> Value
+    ) async throws -> Value {
+        let id = UUID()
+        onStatus?(.waiting)
+        try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            if activeID == nil {
+                activeID = id
+            } else {
+                try await withCheckedThrowingContinuation { continuation in
+                    waiting.append((id, continuation))
+                }
+            }
+        } onCancel: {
+            Task { await self.cancel(id) }
+        }
+        defer { release(id) }
+        try Task.checkCancellation()
+        onStatus?(.running)
+        return try await operation()
+    }
+
+    private func cancel(_ id: UUID) {
+        guard let index = waiting.firstIndex(where: { $0.id == id }) else { return }
+        waiting.remove(at: index).continuation.resume(throwing: CancellationError())
+    }
+
+    private func release(_ id: UUID) {
+        guard activeID == id else { return }
+        if waiting.isEmpty {
+            activeID = nil
+        } else {
+            let next = waiting.removeFirst()
+            activeID = next.id
+            next.continuation.resume()
         }
     }
 }

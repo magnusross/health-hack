@@ -129,6 +129,11 @@ struct DailyTangentDetailsView: View {
     @ViewBuilder
     private var summaryContent: some View {
         switch model.summaryDisplay {
+        case .waiting:
+            Text("Waiting for model…")
+                .font(.system(.body, design: .serif))
+                .foregroundStyle(Color.tangentInk.opacity(0.6))
+
         case .nothingYet:
             HStack(spacing: 8) {
                 ProgressView()

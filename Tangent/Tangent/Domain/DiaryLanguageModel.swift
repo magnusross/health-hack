@@ -24,6 +24,18 @@ protocol DiaryLanguageModel: AnyObject, Sendable {
     /// silent and surfaces later, when a summary is actually asked for.
     func prepare() async
 
+    func generateShortSummary(
+        transcript: String, profile: UserProfile,
+        onPartial: (@Sendable (String) -> Void)?,
+        onStatus: (@Sendable (ModelGenerationStatus) -> Void)?
+    ) async throws -> GeneratedText
+
+    func generateInsights(
+        from summaries: [DiarySummary], focus: DiaryFocus, period: String,
+        onPartial: (@Sendable (String) -> Void)?,
+        onStatus: (@Sendable (ModelGenerationStatus) -> Void)?
+    ) async throws -> GeneratedText
+
     /// - Parameter onPartial: the sentence as it is written, so the screen can
     ///   show it filling in.
     func generateShortSummary(
@@ -39,6 +51,32 @@ protocol DiaryLanguageModel: AnyObject, Sendable {
         period: String,
         onPartial: (@Sendable (String) -> Void)?
     ) async throws -> GeneratedText
+}
+
+/// Queue progress is independent of streamed model output.
+enum ModelGenerationStatus: Sendable {
+    case waiting
+    case running
+}
+
+extension DiaryLanguageModel {
+    func generateShortSummary(
+        transcript: String, profile: UserProfile,
+        onPartial: (@Sendable (String) -> Void)?,
+        onStatus: (@Sendable (ModelGenerationStatus) -> Void)?
+    ) async throws -> GeneratedText {
+        onStatus?(.running)
+        return try await generateShortSummary(transcript: transcript, profile: profile, onPartial: onPartial)
+    }
+
+    func generateInsights(
+        from summaries: [DiarySummary], focus: DiaryFocus, period: String,
+        onPartial: (@Sendable (String) -> Void)?,
+        onStatus: (@Sendable (ModelGenerationStatus) -> Void)?
+    ) async throws -> GeneratedText {
+        onStatus?(.running)
+        return try await generateInsights(from: summaries, focus: focus, period: period, onPartial: onPartial)
+    }
 }
 
 enum DiaryLanguageModelError: LocalizedError, Equatable {

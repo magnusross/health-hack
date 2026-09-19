@@ -16,6 +16,10 @@ import Tokenizers
 /// so Settings never holds 2.5 GB of weights.
 @MainActor
 final class MLXModelCatalog: ModelCatalog {
+    private let resources: ModelResourceGuard
+
+    init(resources: ModelResourceGuard = ModelResourceGuard()) { self.resources = resources }
+
     private var downloads: [SummaryModelID: Task<Void, Error>] = [:]
     private var downloadIDs: [SummaryModelID: UUID] = [:]
     private var progresses: [SummaryModelID: DownloadProgress] = [:]
@@ -48,6 +52,9 @@ final class MLXModelCatalog: ModelCatalog {
             return try await existing.value
         }
 
+        if ModelStorage.isDownloaded(model) { return }
+        let reserved = downloads.keys.reduce(Int64(0)) { $0 + ModelResourceGuard.downloadBudget(for: $1) }
+        try resources.checkDownload(model, reservedBytes: reserved)
         let downloadID = UUID()
         downloadIDs[model] = downloadID
         progresses[model] = DownloadProgress(completedBytes: 0, totalBytes: 0)
@@ -102,10 +109,17 @@ final class MLXModelCatalog: ModelCatalog {
                 downloadIDs[model] = nil
             }
         }
-        try await withTaskCancellationHandler {
-            try await task.value
-        } onCancel: {
+        do {
+            try await resources.monitoring(storage: true) {
+                try await withTaskCancellationHandler {
+                    try await task.value
+                } onCancel: {
+                    task.cancel()
+                }
+            }
+        } catch {
             task.cancel()
+            throw error
         }
     }
 

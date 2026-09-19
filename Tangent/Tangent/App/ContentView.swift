@@ -96,7 +96,8 @@ struct ContentView: View {
             NavigationStack {
                 InsightsView(
                     noteStore: dependencies.noteStore,
-                    languageModel: dependencies.languageModel
+                    languageModel: dependencies.languageModel,
+                    modelCatalog: dependencies.modelCatalog
                 )
                 .tangentLogoToolbar()
             }

@@ -3,15 +3,19 @@ import SwiftUI
 struct InsightsView: View {
     @EnvironmentObject private var preferences: AppPreferences
     @StateObject private var model: InsightsViewModel
+    private let modelCatalog: (any ModelCatalog)?
 
     init(
         noteStore: any NoteStore,
-        languageModel: any DiaryLanguageModel
+        languageModel: any DiaryLanguageModel,
+        modelCatalog: (any ModelCatalog)? = nil
     ) {
+        self.modelCatalog = modelCatalog
         _model = StateObject(
             wrappedValue: InsightsViewModel(
                 noteStore: noteStore,
-                languageModel: languageModel
+                languageModel: languageModel,
+                selectedModel: modelCatalog?.selectedModel ?? .default
             )
         )
     }
@@ -23,6 +27,9 @@ struct InsightsView: View {
         .background(Color.tangentWash)
         .navigationTitle("Insights")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            model.setSelectedModel(modelCatalog?.selectedModel ?? .default)
+        }
     }
 
     private var insightsContent: some View {
@@ -34,7 +41,9 @@ struct InsightsView: View {
                     if preferences.aiEnabled && model.isGenerating {
                         // The words themselves say it is working, so there is
                         // nothing to spin until the first one arrives.
-                        if model.streamingInsight.isEmpty {
+                        if model.isWaiting {
+                            Text("Waiting for model…").foregroundStyle(.secondary)
+                        } else if model.streamingInsight.isEmpty {
                             waitingIndicator
                         } else {
                             streamingBlock(model.streamingInsight)
@@ -92,11 +101,21 @@ struct InsightsView: View {
                 displayedComponents: .date
             )
 
+            Text("Looks back up to \(model.insightSpanDescription) with this model.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
             Button {
-                Task { await model.generateInsight() }
+                Task {
+                    model.setSelectedModel(modelCatalog?.selectedModel ?? .default)
+                    await model.generateInsight()
+                }
             } label: {
                 Group {
-                    if preferences.aiEnabled && model.isGenerating {
+                    if preferences.aiEnabled && model.isWaiting {
+                        Text("Waiting…")
+                    } else if preferences.aiEnabled && model.isGenerating {
                         ProgressView()
                             .tint(.white)
                     } else {
@@ -188,7 +207,8 @@ struct InsightsView: View {
     NavigationStack {
         InsightsView(
             noteStore: SwiftDataNoteStore(modelContext: container.mainContext),
-            languageModel: UnavailableDiaryLanguageModel()
+            languageModel: UnavailableDiaryLanguageModel(),
+            modelCatalog: MLXModelCatalog()
         )
     }
     .environmentObject(AppPreferences(defaults: UserDefaults(suiteName: "TangentPreview")!))

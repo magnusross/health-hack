@@ -2,7 +2,6 @@ Make sure to create this app using modular folders: App, DesignSystem, Features/
 
 Housekeeping:
 Every change should be isolated and git committed with appropriate messaging
-https://github.com/magnusross/health-hack.git
 
 Tangent is a general-purpose voice diary for reflecting on any interests, concerns, experiences, projects, or ideas. All diary data and model inference stay on the device.
 Users record 1 - 5 minute entries. When AI is enabled, the selected on-device model writes one short summary per entry. First launch collects name, interests, and concerns with AI off by default. When AI is off, do not download or run models; show transcript previews in the diary, hide daily summaries and model settings, and disable insight generation. Insights use dated short summaries as evidence and the user's interests and concerns as context. Supported models include small Qwen models, Gemma, and MedGemma.
