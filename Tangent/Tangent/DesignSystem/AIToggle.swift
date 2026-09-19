@@ -16,6 +16,6 @@ struct AIRequirementsNote: View {
              ? "Requires an iPad with A14, M1 or newer and iPadOS 18.2+. Larger models need more memory."
              : "Requires iPhone 12 or later, or iPhone SE (3rd generation), with iOS 18.2+. Larger models need more memory.")
             .font(.footnote)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(Color(uiColor: .secondaryLabel))
     }
 }

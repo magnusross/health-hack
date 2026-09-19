@@ -47,14 +47,16 @@ struct OnboardingView: View {
                             AIToggle()
                                 .padding(16)
                                 .background(.background, in: RoundedRectangle(cornerRadius: 12))
-                            if preferences.aiEnabled {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    AIRequirementsNote()
-                                    Text("Download your preferred model in Settings to generate summaries.")
-                                }
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
+                            VStack(alignment: .leading, spacing: 6) {
+                                AIRequirementsNote()
+                                Text("Download your preferred model in Settings to generate summaries.")
                             }
+                            .font(.footnote)
+                            .foregroundStyle(Color(uiColor: .secondaryLabel))
+                            .opacity(preferences.aiEnabled ? 1 : 0)
+                            .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: preferences.aiEnabled)
+                            .accessibilityHidden(!preferences.aiEnabled)
+                            .allowsHitTesting(preferences.aiEnabled)
                         }
                         if let message = model.message {
                             Text(message).foregroundStyle(.secondary)
