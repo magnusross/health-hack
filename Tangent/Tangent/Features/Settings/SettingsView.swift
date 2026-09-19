@@ -248,7 +248,9 @@ struct SettingsView: View {
 
         case .notDownloaded, .failed:
             VStack(alignment: .leading, spacing: 7) {
-                statusLine(summaryModel)
+                if case .failed = state {
+                    statusLine(summaryModel)
+                }
                 modelButton(downloadLabel(for: summaryModel), role: nil) {
                     Task { await model.download(summaryModel) }
                 }
