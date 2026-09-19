@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct OnboardingView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject private var preferences: AppPreferences
     @StateObject private var model: SettingsViewModel
     private enum Field: Hashable { case name, interests, concerns }
@@ -61,7 +62,23 @@ struct OnboardingView: View {
             }
             .scrollContentBackground(.hidden)
             .scrollDismissesKeyboard(.interactively)
-            .background(Color.tangentWash)
+            .background {
+                GeometryReader { proxy in
+                    let diameter = min(proxy.size.width * 1.4, proxy.size.height * 0.85) * 0.75
+                    ZStack {
+                        Color.tangentWash
+                        TangentOrb(reduceMotion: reduceMotion)
+                            .frame(width: diameter, height: diameter)
+                            .compositingGroup()
+                            .opacity(0.5)
+                            .position(x: proxy.size.width / 2, y: proxy.size.height * 0.55)
+                    }
+                    .clipped()
+                }
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            }
             .foregroundStyle(Color.tangentInk)
             .safeAreaInset(edge: .bottom) {
                 Button {
