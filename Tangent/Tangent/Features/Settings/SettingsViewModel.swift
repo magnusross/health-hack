@@ -215,6 +215,9 @@ final class SettingsViewModel: ObservableObject {
     }
 
     private static func downloadDescription(_ progress: DownloadProgress) -> String {
+        if progress.completedFraction != nil {
+            return "Downloading · \(Int(progress.fraction * 100))%"
+        }
         guard progress.totalBytes > 0 else { return "Starting download…" }
         return "Downloading · \(size(progress.completedBytes)) of \(size(progress.totalBytes))"
     }

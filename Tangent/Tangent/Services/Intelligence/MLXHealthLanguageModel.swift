@@ -1,8 +1,10 @@
 import Foundation
+#if !TANGENT_LEGACY_MLX
 import HuggingFace
+import MLXHuggingFace
+#endif
 import OSLog
 import MLX
-import MLXHuggingFace
 import MLXLMCommon
 import Tokenizers
 
@@ -176,7 +178,6 @@ actor MLXHealthLanguageModel: HealthLanguageModel {
         label: String,
         onPartial: (@Sendable (String) -> Void)?
     ) async throws -> String {
-        let input = try await container.prepare(input: UserInput(prompt: prompt))
         // Near-deterministic: this is a record of what the patient said, not a
         // piece of writing that benefits from variety.
         let parameters = GenerateParameters(maxTokens: maxTokens, temperature: 0.2)
@@ -185,7 +186,15 @@ actor MLXHealthLanguageModel: HealthLanguageModel {
         // releases it to decode. Consuming the stream inside container.perform
         // instead would hold it for the whole run, which is how one summary
         // came to block every other.
+        #if TANGENT_LEGACY_MLX
+        let stream = try await container.perform { context in
+            let input = try await context.processor.prepare(input: UserInput(prompt: prompt))
+            return try MLXLMCommon.generate(input: input, parameters: parameters, context: context)
+        }
+        #else
+        let input = try await container.prepare(input: UserInput(prompt: prompt))
         let stream = try await container.generate(input: input, parameters: parameters)
+        #endif
 
         var output = ""
         var reported = ""
@@ -207,13 +216,18 @@ actor MLXHealthLanguageModel: HealthLanguageModel {
         }
 
         if let info {
+            #if TANGENT_LEGACY_MLX
+            let stopReason = "unavailable in MLX 2.x"
+            #else
+            let stopReason = String(describing: info.stopReason)
+            #endif
             Self.log.notice(
                 """
                 \(label, privacy: .public): prompt \(info.promptTokenCount, privacy: .public) tokens at \
                 \(info.promptTokensPerSecond, format: .fixed(precision: 1)) t/s, \
                 generated \(info.generationTokenCount, privacy: .public) at \
                 \(info.tokensPerSecond, format: .fixed(precision: 1)) t/s, \
-                stopped on \(String(describing: info.stopReason), privacy: .public), \
+                stopped on \(stopReason, privacy: .public), \
                 \(info.promptTime + info.generateTime, format: .fixed(precision: 1))s
                 """
             )
@@ -237,15 +251,30 @@ actor MLXHealthLanguageModel: HealthLanguageModel {
         }
         loading?.task.cancel()
 
+        #if TANGENT_LEGACY_MLX
+        GPU.set(cacheLimit: 20 * 1024 * 1024)
+        #else
         Memory.cacheLimit = 20 * 1024 * 1024
+        #endif
         loaded = nil
 
         let task = Task<ModelContainer, Error> {
+            #if TANGENT_LEGACY_MLX
+            // Loading from the completed local snapshot keeps generation offline.
+            try await model.factory.loadContainer(
+                hub: ModelStorage.client(),
+                configuration: ModelConfiguration(
+                    directory: ModelStorage.modelDirectory(model),
+                    extraEOSTokens: model.configuration.extraEOSTokens
+                )
+            )
+            #else
             try await model.factory.loadContainer(
                 from: #hubDownloader(ModelStorage.client()),
                 using: #huggingFaceTokenizerLoader(),
                 configuration: model.configuration
             )
+            #endif
         }
         loading = (model, task)
         defer { loading = nil }

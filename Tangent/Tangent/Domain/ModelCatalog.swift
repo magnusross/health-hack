@@ -5,8 +5,11 @@ import Foundation
 struct DownloadProgress: Equatable, Sendable {
     var completedBytes: Int64
     var totalBytes: Int64
+    /// Some download providers report a fraction without byte counts.
+    var completedFraction: Double? = nil
 
     var fraction: Double {
+        if let completedFraction { return min(1, max(0, completedFraction)) }
         guard totalBytes > 0 else { return 0 }
         return min(1, Double(completedBytes) / Double(totalBytes))
     }

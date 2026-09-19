@@ -208,7 +208,7 @@ struct SettingsView: View {
                 }
                 // The bar only appears once the total is known; before that the
                 // spinner carries the "something is happening" job on its own.
-                if progress.totalBytes > 0 {
+                if progress.totalBytes > 0 || progress.completedFraction != nil {
                     ProgressView(value: progress.fraction)
                         .tint(Color.tangentPurple)
                 }

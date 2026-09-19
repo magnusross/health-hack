@@ -451,7 +451,7 @@ private final class StubHealthLanguageModel: HealthLanguageModel {
         onPartial: (@Sendable (String) -> Void)?
     ) async throws -> GeneratedText {
         onPartial?("You seem")
-        GeneratedText(
+        return GeneratedText(
             text: "You seem steadier at weekends.",
             promptText: "insights prompt for \(period)"
         )
