@@ -205,10 +205,6 @@ struct SettingsView: View {
             .accessibilityIdentifier("model-\(summaryModel.rawValue)")
             .accessibilityValue(isSelected ? "Selected" : "Not selected")
 
-            Text(summaryModel.description)
-                .font(.footnote)
-                .foregroundStyle(Color.tangentInk.opacity(0.65))
-
             modelStatus(summaryModel, state: state)
         }
         .padding(.vertical, 4)

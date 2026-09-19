@@ -5,6 +5,13 @@ short summary, and review insights based on short summaries and your interests a
 Diary data, transcription, and model inference stay on the device. Model weights
 are downloaded from Hugging Face only when you tap Download in Settings.
 
+iOS asks for Speech Recognition permission and displays Apple's standard warning
+that speech data will be sent to Apple. Tangent uses on-device transcription:
+it checks that on-device recognition is supported and requires it for every
+request. If it is unavailable, transcription stops instead of uploading audio.
+The system warning does not reflect Tangent's on-device-only configuration.
+See [Apple's on-device recognition documentation](https://developer.apple.com/documentation/speech/sfspeechrecognitionrequest/requiresondevicerecognition).
+
 ## Requirements
 
 - macOS with Xcode; iOS 18.2 or later.
