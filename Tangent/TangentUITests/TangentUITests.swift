@@ -83,7 +83,7 @@ final class TangentUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing", "--reset-onboarding"]
         app.launch()
-        XCTAssertTrue(app.staticTexts["Welcome to Tangent"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["complete-onboarding"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.switches["ai-enabled"].value as? String, "0")
         XCTAssertEqual(app.switches["ai-enabled"].label, "AI summaries")
         let screenshot = XCTAttachment(screenshot: app.screenshot())
@@ -139,7 +139,7 @@ final class TangentUITests: XCTestCase {
         app.launchArguments = ["--ui-testing"]
         app.launch()
         XCTAssertTrue(app.buttons["Settings"].waitForExistence(timeout: 3))
-        XCTAssertFalse(app.staticTexts["Welcome to Tangent"].exists)
+        XCTAssertFalse(app.buttons["complete-onboarding"].exists)
         app.buttons["Settings"].tap()
         XCTAssertEqual(app.textFields["profile-name"].value as? String, "Alex")
         XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "profile-interests").firstMatch.value as? String, "Drawing")

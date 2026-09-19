@@ -15,53 +15,57 @@ struct OnboardingView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    VStack(spacing: 12) {
-                        Image("Logo")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 56, height: 56)
-                            .accessibilityHidden(true)
-                        Text("Welcome to Tangent")
-                            .font(.system(.title2, design: .serif, weight: .medium))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .listRowBackground(Color.clear)
-                }
-                Section("Profile") {
-                    TextField("Name", text: $model.name)
-                        .textContentType(.givenName)
-                        .accessibilityIdentifier("profile-name")
-                        .focused($focusedField, equals: .name)
-                }
-                Section("Your focus") {
-                    TextField("Interests", text: $model.interests, axis: .vertical)
-                        .lineLimit(2...5)
-                        .accessibilityIdentifier("profile-interests")
-                        .focused($focusedField, equals: .interests)
-                    TextField("Concerns", text: $model.concerns, axis: .vertical)
-                        .lineLimit(2...5)
-                        .accessibilityIdentifier("profile-concerns")
-                        .focused($focusedField, equals: .concerns)
-                }
-                Section {
-                    AIToggle()
-                } footer: {
-                    if preferences.aiEnabled {
-                        VStack(alignment: .leading, spacing: 6) {
-                            AIRequirementsNote()
-                            Text("Download your preferred model in Settings to generate summaries.")
+            GeometryReader { layout in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 32) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            sectionHeading("Profile")
+                            TextField("Name", text: $model.name)
+                                .textContentType(.givenName)
+                                .accessibilityIdentifier("profile-name")
+                                .focused($focusedField, equals: .name)
+                                .padding(16)
+                                .background(.background, in: RoundedRectangle(cornerRadius: 12))
+                        }
+                        VStack(alignment: .leading, spacing: 8) {
+                            sectionHeading("Your focus")
+                            VStack(alignment: .leading, spacing: 16) {
+                                TextField("Interests", text: $model.interests, axis: .vertical)
+                                    .lineLimit(2...5)
+                                    .accessibilityIdentifier("profile-interests")
+                                    .focused($focusedField, equals: .interests)
+                                Divider()
+                                TextField("Concerns", text: $model.concerns, axis: .vertical)
+                                    .lineLimit(2...5)
+                                    .accessibilityIdentifier("profile-concerns")
+                                    .focused($focusedField, equals: .concerns)
+                            }
+                            .padding(16)
+                            .background(.background, in: RoundedRectangle(cornerRadius: 12))
+                        }
+                        VStack(alignment: .leading, spacing: 8) {
+                            AIToggle()
+                                .padding(16)
+                                .background(.background, in: RoundedRectangle(cornerRadius: 12))
+                            if preferences.aiEnabled {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    AIRequirementsNote()
+                                    Text("Download your preferred model in Settings to generate summaries.")
+                                }
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                            }
+                        }
+                        if let message = model.message {
+                            Text(message).foregroundStyle(.secondary)
                         }
                     }
+                    .padding(20)
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: layout.size.height, alignment: .center)
                 }
-                if let message = model.message {
-                    Section { Text(message).foregroundStyle(.secondary) }
-                }
+                .scrollDismissesKeyboard(.interactively)
             }
-            .scrollContentBackground(.hidden)
-            .scrollDismissesKeyboard(.interactively)
             .background {
                 GeometryReader { proxy in
                     let diameter = min(proxy.size.width * 1.4, proxy.size.height * 0.85) * 0.75
@@ -97,7 +101,6 @@ struct OnboardingView: View {
                 .disabled(model.isLoading || model.isSavingProfile)
                 .accessibilityIdentifier("complete-onboarding")
                 .padding(20)
-                .background(.bar)
             }
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {
@@ -111,5 +114,12 @@ struct OnboardingView: View {
             }
         }
         .tint(Color.tangentPurple)
+    }
+
+    private func sectionHeading(_ title: String) -> some View {
+        Text(title.uppercased())
+            .font(.footnote)
+            .padding(.horizontal, 16)
+            .accessibilityAddTraits(.isHeader)
     }
 }
