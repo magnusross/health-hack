@@ -9,14 +9,14 @@ struct TangentTests {
     func noteStoreCRUD() async throws {
         let container = try TangentModelContainer.make(inMemory: true)
         let store = SwiftDataNoteStore(modelContext: container.mainContext)
-        let patientID = UUID()
+        let profileID = UUID()
 
-        var profile = PatientProfile(id: patientID, name: "Sam")
-        try await store.savePatientProfile(profile)
-        #expect(try await store.patientProfile(id: patientID)?.name == "Sam")
+        var profile = UserProfile(id: profileID, name: "Sam")
+        try await store.saveUserProfile(profile)
+        #expect(try await store.userProfile(id: profileID)?.name == "Sam")
         profile.name = "Alex"
-        try await store.savePatientProfile(profile)
-        #expect(try await store.patientProfile(id: patientID)?.name == "Alex")
+        try await store.saveUserProfile(profile)
+        #expect(try await store.userProfile(id: profileID)?.name == "Alex")
 
         var prompt = Prompt(text: "How are you feeling?")
         try await store.savePrompt(prompt)
@@ -25,17 +25,17 @@ struct TangentTests {
         #expect(try await store.prompt(id: prompt.id)?.text == prompt.text)
 
         var question = Question(
-            patientID: patientID,
+            profileID: profileID,
             promptText: "Question prompt for Alex",
             text: "How was your energy?"
         )
         try await store.saveQuestion(question)
         question.text = "How was your energy today?"
         try await store.saveQuestion(question)
-        #expect(try await store.questions(patientID: patientID) == [question])
+        #expect(try await store.questions(profileID: profileID) == [question])
 
         var diary = DiaryEntry(
-            patientID: patientID,
+            profileID: profileID,
             day: Date(),
             questions: [DiaryQuestion(text: question.text)],
             promptText: "Diary prompt for Alex"
@@ -66,19 +66,19 @@ struct TangentTests {
         try await store.deleteDiaryEntry(id: diary.id)
         try await store.deleteQuestion(id: question.id)
         try await store.deletePrompt(id: prompt.id)
-        try await store.deletePatientProfile(id: profile.id)
+        try await store.deleteUserProfile(id: profile.id)
 
         #expect(try await store.insights().isEmpty)
-        #expect(try await store.diaryEntries(patientID: nil).isEmpty)
-        #expect(try await store.questions(patientID: nil).isEmpty)
+        #expect(try await store.diaryEntries(profileID: nil).isEmpty)
+        #expect(try await store.questions(profileID: nil).isEmpty)
         #expect(try await store.prompts().isEmpty)
-        #expect(try await store.patientProfiles().isEmpty)
+        #expect(try await store.userProfiles().isEmpty)
     }
 
     @Test
     func diaryTimelineIncludesMissingDaysAndEmptyToday() throws {
         let calendar = testCalendar
-        let patientID = UUID()
+        let profileID = UUID()
         let today = try #require(
             calendar.date(from: DateComponents(year: 2026, month: 9, day: 15))
         )
@@ -90,13 +90,13 @@ struct TangentTests {
         )
         let entries = [
             DiaryEntry(
-                patientID: patientID,
+                profileID: profileID,
                 day: twelfth,
                 promptText: "Prompt",
                 summaryShort: "First entry"
             ),
             DiaryEntry(
-                patientID: patientID,
+                profileID: profileID,
                 day: thirteenth,
                 promptText: "Prompt",
                 summaryShort: "Second entry"
@@ -119,12 +119,12 @@ struct TangentTests {
     @Test
     func diaryTimelineShowsCompletedToday() throws {
         let calendar = testCalendar
-        let patientID = UUID()
+        let profileID = UUID()
         let today = try #require(
             calendar.date(from: DateComponents(year: 2026, month: 9, day: 15))
         )
         let entry = DiaryEntry(
-            patientID: patientID,
+            profileID: profileID,
             day: today,
             promptText: "Prompt",
             summaryShort: "Today is complete"
@@ -158,12 +158,12 @@ struct TangentTests {
 
     @Test
     func diaryXMLExportIncludesAllFieldsAndEscapesText() throws {
-        let patientID = UUID()
+        let profileID = UUID()
         let questionID = UUID()
         let entryID = UUID()
         let entry = DiaryEntry(
             id: entryID,
-            patientID: patientID,
+            profileID: profileID,
             day: Date(timeIntervalSince1970: 100),
             questions: [DiaryQuestion(id: questionID, text: "Pain < 3 & improving")],
             promptText: "Ask \"carefully\"",
@@ -173,12 +173,12 @@ struct TangentTests {
 
         let data = DiaryXMLExporter.makeDocument(
             entries: [entry],
-            patientID: patientID,
+            profileID: profileID,
             generatedAt: Date(timeIntervalSince1970: 0)
         )
         let xml = try #require(String(data: data, encoding: .utf8))
 
-        #expect(xml.contains("patient-id=\"\(patientID.uuidString)\""))
+        #expect(xml.contains("profile-id=\"\(profileID.uuidString)\""))
         #expect(xml.contains("<entry id=\"\(entryID.uuidString)\">"))
         #expect(xml.contains("<question id=\"\(questionID.uuidString)\">Pain &lt; 3 &amp; improving</question>"))
         #expect(xml.contains("<prompt-text>Ask &quot;carefully&quot;</prompt-text>"))
@@ -236,11 +236,11 @@ struct TangentTests {
         let today = try #require(
             calendar.date(from: DateComponents(year: 2026, month: 9, day: 18))
         )
-        let patient = PatientProfile(name: "Taylor")
-        try await store.savePatientProfile(patient)
+        let user = UserProfile(name: "Taylor", interests: ["Creative projects"], concerns: ["Finding time"])
+        try await store.saveUserProfile(user)
         try await store.saveDiaryEntry(
             DiaryEntry(
-                patientID: patient.id,
+                profileID: user.id,
                 day: today,
                 promptText: "Prompt",
                 summaryShort: "A steady day"
@@ -248,7 +248,7 @@ struct TangentTests {
         )
         let model = InsightsViewModel(
             noteStore: store,
-            healthModel: StubHealthLanguageModel(),
+            languageModel: StubDiaryLanguageModel(),
             calendar: calendar,
             now: today
         )
@@ -280,33 +280,30 @@ struct TangentTests {
         let context = container.mainContext
         let store = SwiftDataNoteStore(modelContext: context)
 
-        try PatientSeeder.seedIfNeeded(in: context)
+        try ProfileSeeder.seedIfNeeded(in: context)
         try DemoDataSeeder.seedIfNeeded(in: context)
-        let patient = try #require(await store.patientProfiles().first)
-        #expect(try await store.diaryEntries(patientID: patient.id).count == 11)
+        let user = try #require(await store.userProfiles().first)
+        #expect(try await store.diaryEntries(profileID: user.id).count == 11)
         let insights = try await store.insights()
         #expect(insights.count == 1)
-        #expect(insights.first?.text.contains("sleep and energy") == true)
-        #expect(patient.age == 29)
-        #expect(patient.email == "magnus.ross@example.com")
-        #expect(try await store.questions(patientID: patient.id).count == 8)
-        let reminder = try #require(patient.dailyReminder)
-        #expect(Calendar.autoupdatingCurrent.component(.hour, from: reminder) == 21)
+        #expect(insights.first?.text.contains("creative project") == true)
+        #expect(try await store.questions(profileID: user.id).count == 4)
+        #expect(user.dailyReminder == nil)
 
         try DemoDataSeeder.seedIfNeeded(in: context)
-        #expect(try await store.diaryEntries(patientID: patient.id).count == 11)
+        #expect(try await store.diaryEntries(profileID: user.id).count == 11)
         #expect(try await store.insights().count == 1)
     }
 
     @Test
     func promptTemplateFillsBothPlaceholders() {
-        let profile = PatientProfile(
+        let profile = UserProfile(
             name: "Taylor",
             age: 29,
             weight: 68,
             gender: "Non-binary",
-            healthInterests: ["Sleep", "Energy"],
-            healthConcerns: ["Headaches"],
+            interests: ["Sleep", "Energy"],
+            concerns: ["Headaches"],
             email: "taylor@example.com"
         )
 
@@ -318,23 +315,23 @@ struct TangentTests {
         #expect(!filled.contains(PromptTemplate.transcriptPlaceholder))
         #expect(!filled.contains(PromptTemplate.profilePlaceholder))
         #expect(filled.contains("TRANSCRIPT: I slept badly and felt flat."))
-        #expect(filled.contains("Age: 29"))
-        #expect(filled.contains("Weight: 68 kg"))
-        #expect(filled.contains("Health interests: Sleep Energy"))
-        // The email tells the model nothing about the patient's health.
+        #expect(!filled.contains("Age: 29"))
+        #expect(!filled.contains("Weight: 68 kg"))
+        #expect(filled.contains("Interests: Sleep; Energy"))
+        // Contact details are not model inputs.
         #expect(!filled.contains("taylor@example.com"))
     }
 
     @Test
     func insightsPromptUsesOnlyNonemptyShortSummariesInDateOrder() throws {
-        let patientID = UUID()
+        let profileID = UUID()
         let entries = [
-            DiaryEntry(patientID: patientID, day: Date(timeIntervalSince1970: 200),
+            DiaryEntry(profileID: profileID, day: Date(timeIntervalSince1970: 200),
                        promptText: "PRIVATE PROMPT", summaryShort: "  I had knee pain.  ",
                        transcriptPath: "/private/transcript.txt"),
-            DiaryEntry(patientID: patientID, day: Date(timeIntervalSince1970: 100),
+            DiaryEntry(profileID: profileID, day: Date(timeIntervalSince1970: 100),
                        promptText: "PRIVATE PROMPT", summaryShort: "I slept poorly."),
-            DiaryEntry(patientID: patientID, day: Date(timeIntervalSince1970: 300),
+            DiaryEntry(profileID: profileID, day: Date(timeIntervalSince1970: 300),
                        promptText: "PRIVATE PROMPT", summaryShort: " \n ",
                        transcriptPath: "/private/unsummarised.txt")
         ]
@@ -354,28 +351,32 @@ struct TangentTests {
     }
 
     @Test @MainActor
-    func patientSeederCreatesTheProfileAndItsQuestions() async throws {
+    func profileSeederCreatesTheProfileAndItsQuestions() async throws {
         let container = try TangentModelContainer.make(inMemory: true)
         let context = container.mainContext
         let store = SwiftDataNoteStore(modelContext: context)
 
-        try PatientSeeder.seedIfNeeded(in: context)
-        let patient = try #require(await store.patientProfiles().first)
-        #expect(patient.name == "Magnus Ross")
-        #expect(patient.age == 29)
-        #expect(patient.weight == 75)
-        #expect(patient.gender == "male")
-        #expect(patient.healthConcerns.first?.contains("bad knee from running") == true)
+        try ProfileSeeder.seedIfNeeded(in: context)
+        let user = try #require(await store.userProfiles().first)
+        #expect(user.name == "You")
 
         // NoteStore sorts questions by text, so compare the set rather than
         // the seeder's order.
-        let questions = try await store.questions(patientID: patient.id)
-        #expect(questions.map(\.text).sorted() == PatientSeeder.questionTexts.sorted())
+        let questions = try await store.questions(profileID: user.id)
+        #expect(questions.map(\.text).sorted() == ProfileSeeder.questionTexts.sorted())
 
-        // Seeding again leaves one patient and one set of questions.
-        try PatientSeeder.seedIfNeeded(in: context)
-        #expect(try await store.patientProfiles().count == 1)
-        #expect(try await store.questions(patientID: patient.id).count == 8)
+        // Seeding again leaves one user and one set of questions.
+        try ProfileSeeder.seedIfNeeded(in: context)
+        #expect(try await store.userProfiles().count == 1)
+        #expect(try await store.questions(profileID: user.id).count == 4)
+
+        var edited = user
+        edited.name = "My diary"
+        edited.interests = ["Painting", "Language learning"]
+        edited.concerns = ["Making time for friends"]
+        try await store.saveUserProfile(edited)
+        try ProfileSeeder.seedIfNeeded(in: context)
+        #expect(try await store.userProfile(id: user.id) == edited)
     }
 
     @Test @MainActor
@@ -394,16 +395,16 @@ struct TangentTests {
     }
 
     @Test
-    func profileDescriptionOmitsFieldsThePatientDidNotGive() {
-        let sparse = PatientProfile(name: "Sam")
+    func profileDescriptionOmitsUnspecifiedDetails() {
+        let sparse = UserProfile(name: "Sam")
 
         let description = sparse.promptDescription
 
-        #expect(description == "Name: Sam")
+        #expect(description == "Name: Sam\nNo interests or concerns specified.")
         #expect(!description.contains("Age"))
         #expect(!description.contains("Weight"))
-        #expect(PatientProfile(name: "").promptDescription
-            == "No profile details were given.")
+        #expect(UserProfile(name: "").promptDescription
+            == "No interests or concerns specified.")
     }
 
     @Test
@@ -468,20 +469,20 @@ struct TangentTests {
     func dailyDetailsGeneratesOneSummaryAndReusesIt() async throws {
         let container = try TangentModelContainer.make(inMemory: true)
         let store = SwiftDataNoteStore(modelContext: container.mainContext)
-        let patient = PatientProfile(name: "Taylor")
-        try await store.savePatientProfile(patient)
+        let user = UserProfile(name: "Taylor")
+        try await store.saveUserProfile(user)
         let transcript = FileManager.default.temporaryDirectory.appending(path: "\(UUID()).txt")
         defer { try? FileManager.default.removeItem(at: transcript) }
         try "I had a steady day.".write(to: transcript, atomically: true, encoding: .utf8)
-        let entry = DiaryEntry(patientID: patient.id, day: Date(), promptText: "",
+        let entry = DiaryEntry(profileID: user.id, day: Date(), promptText: "",
                                transcriptPath: transcript.path)
         try await store.saveDiaryEntry(entry)
-        let healthModel = StubHealthLanguageModel()
-        let details = DailyTangentDetailsViewModel(noteStore: store, healthModel: healthModel,
+        let languageModel = StubDiaryLanguageModel()
+        let details = DailyTangentDetailsViewModel(noteStore: store, languageModel: languageModel,
                                                   diaryID: entry.id)
         await details.start()
         await details.start()
-        #expect(await healthModel.shortSummaryCalls == 1)
+        #expect(await languageModel.shortSummaryCalls == 1)
         let saved = try #require(await store.diaryEntry(id: entry.id))
         #expect(saved.summaryShort == "I had a steady day.")
         #expect(saved.promptText == "short prompt")
@@ -492,23 +493,23 @@ struct TangentTests {
     func insightsSkipEntriesWithoutSummaries() async throws {
         let container = try TangentModelContainer.make(inMemory: true)
         let store = SwiftDataNoteStore(modelContext: container.mainContext)
-        let patient = PatientProfile(name: "Taylor")
-        try await store.savePatientProfile(patient)
-        let entry = DiaryEntry(patientID: patient.id, day: Date(), promptText: "private prompt",
+        let user = UserProfile(name: "Taylor")
+        try await store.saveUserProfile(user)
+        let entry = DiaryEntry(profileID: user.id, day: Date(), promptText: "private prompt",
                                summaryShort: " \n ", transcriptPath: "/private/transcript.txt")
         try await store.saveDiaryEntry(entry)
-        let healthModel = StubHealthLanguageModel()
-        let model = InsightsViewModel(noteStore: store, healthModel: healthModel)
+        let languageModel = StubDiaryLanguageModel()
+        let model = InsightsViewModel(noteStore: store, languageModel: languageModel)
         await model.generateInsight()
-        #expect(model.generationError == HealthLanguageModelError.notEnoughEntries.localizedDescription)
+        #expect(model.generationError == DiaryLanguageModelError.notEnoughEntries.localizedDescription)
         #expect(try await store.insights().isEmpty)
-        #expect(await healthModel.receivedSummaries.isEmpty)
+        #expect(await languageModel.receivedSummaries.isEmpty)
 
         var completed = entry
         completed.summaryShort = "I felt rested."
         try await store.saveDiaryEntry(completed)
         await model.generateInsight()
-        #expect(await healthModel.receivedSummaries.map(\.text) == ["I felt rested."])
+        #expect(await languageModel.receivedSummaries.map(\.text) == ["I felt rested."])
         let insight = try #require(model.generatedInsight)
         #expect(insight.promptText.contains("I felt rested."))
         #expect(!insight.promptText.contains("private prompt"))
@@ -521,24 +522,20 @@ struct TangentTests {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
         let url = directory.appending(path: "diary.store")
-        let entry = DiaryEntry(patientID: UUID(), day: Date(),
+        let entry = DiaryEntry(profileID: UUID(), day: Date(),
                                questions: [DiaryQuestion(text: "How did you sleep?")],
                                promptText: "Original short prompt", summaryShort: "I slept well.",
                                transcriptPath: "/private/original.txt")
         try autoreleasepool {
-            let schema = Schema([PatientProfileRecord.self, PromptRecord.self, QuestionRecord.self,
-                                 LegacyDiary.DiaryEntryRecord.self, InsightRecord.self])
+            let schema = Schema(TangentSchemaV0.models)
             let container = try ModelContainer(for: schema, configurations: [
                 ModelConfiguration(schema: schema, url: url)
             ])
-            container.mainContext.insert(LegacyDiary.DiaryEntryRecord(entry: entry))
+            container.mainContext.insert(TangentSchemaV0.DiaryEntryRecord(entry: entry))
             try container.mainContext.save()
         }
         try autoreleasepool {
-            let schema = TangentModelContainer.schema
-            let container = try ModelContainer(for: schema, configurations: [
-                ModelConfiguration(schema: schema, url: url)
-            ])
+            let container = try TangentModelContainer.make(storeURL: url)
             let records = try container.mainContext.fetch(FetchDescriptor<DiaryEntryRecord>())
             #expect(records.count == 1)
             #expect(records.first?.domainModel == entry)
@@ -559,6 +556,77 @@ struct TangentTests {
         #expect(!columns.contains("ZSUMMARYLONG"))
     }
 
+    @Test @MainActor
+    func settingsSaveGeneralInterestsAndConcerns() async throws {
+        let container = try TangentModelContainer.make(inMemory: true)
+        let context = container.mainContext
+        try ProfileSeeder.seedIfNeeded(in: context)
+        let store = SwiftDataNoteStore(modelContext: context)
+        let settings = SettingsViewModel(noteStore: store, reminderScheduler: UnavailableReminderScheduler())
+        await settings.load()
+        settings.name = "  Alex  "
+        settings.interests = "Painting\n Learning Spanish \n"
+        settings.concerns = "Finishing my project\n\n"
+        await settings.saveProfile()
+        try ProfileSeeder.seedIfNeeded(in: context)
+        let profile = try #require(await store.userProfiles().first)
+        #expect(profile.name == "Alex")
+        #expect(profile.interests == ["Painting", "Learning Spanish"])
+        #expect(profile.concerns == ["Finishing my project"])
+        let summaries = [DiaryEntry(profileID: profile.id, day: Date(), promptText: "",
+                                    summaryShort: "I finished a sketch.")].compactMap(DiarySummary.init)
+        let prompt = PromptTemplate.weeklyInsights.filled(period: "Today", summaries: summaries,
+                                                          focus: profile.focus)
+        #expect(prompt.contains("Painting; Learning Spanish"))
+        #expect(prompt.contains("Finishing my project"))
+        #expect(prompt.contains("I finished a sketch."))
+        #expect(!prompt.contains("medical assistant"))
+    }
+
+    @Test @MainActor
+    func profileRenamePreservesExistingDataAndReferences() throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appending(path: "profile.store")
+        let profile = UserProfile(name: "Alex", age: 30, interests: ["Photography"],
+                                  concerns: ["Finishing a project"], dailyReminder: Date(timeIntervalSince1970: 100))
+        let entry = DiaryEntry(profileID: profile.id, day: Date(), promptText: "original prompt",
+                               summaryShort: "I finished a photo series.", transcriptPath: "/private/entry.txt")
+        let question = Question(profileID: profile.id, promptText: "custom", text: "What did you create?")
+        try autoreleasepool {
+            // Reproduce the unversioned database written by the previous app.
+            let schema = Schema(TangentSchemaV1.models)
+            let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, url: url)])
+            container.mainContext.insert(TangentSchemaV1.PatientProfileRecord(profile: profile))
+            container.mainContext.insert(TangentSchemaV1.DiaryEntryRecord(entry: entry))
+            container.mainContext.insert(TangentSchemaV1.QuestionRecord(question: question))
+            try container.mainContext.save()
+        }
+        try autoreleasepool {
+            let container = try TangentModelContainer.make(storeURL: url)
+            let context = container.mainContext
+            #expect(try context.fetch(FetchDescriptor<UserProfileRecord>()).map(\.domainModel) == [profile])
+            #expect(try context.fetch(FetchDescriptor<DiaryEntryRecord>()).map(\.domainModel) == [entry])
+            #expect(try context.fetch(FetchDescriptor<QuestionRecord>()).map(\.domainModel) == [question])
+            try ProfileSeeder.seedIfNeeded(in: context)
+            #expect(try context.fetch(FetchDescriptor<UserProfileRecord>()).map(\.domainModel) == [profile])
+        }
+    }
+
+    @Test
+    func supportedModelsHaveStableIdentitiesAndSmallQwenChoices() {
+        #expect(SummaryModelID.default == .qwen3_0_6B)
+        #expect(Set(SummaryModelID.allCases.map(\.repoID)).count == SummaryModelID.allCases.count)
+        #expect(SummaryModelID.qwen3_0_6B.approximateDownloadBytes < 400_000_000)
+        #expect(SummaryModelID.qwen2_5_0_5B.approximateDownloadBytes < SummaryModelID.qwen3_0_6B.approximateDownloadBytes)
+        #expect(SummaryModelID.qwen3_0_6B.disablesThinking)
+        #expect(SummaryModelID.qwen3_1_7B.disablesThinking)
+        #expect(!SummaryModelID.gemma3_1B.disablesThinking)
+        #expect(SummaryModelID(rawValue: "gemma3-1b-qat-4bit") == .gemma3_1B)
+        #expect(SummaryModelID(rawValue: "medgemma-1.5-4b-it-4bit") == .medgemma4B)
+    }
+
     private var testCalendar: Calendar {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
@@ -568,7 +636,7 @@ struct TangentTests {
 
 /// Stands in for the model so the view model's own behaviour can be tested
 /// without a 2.5 GB download.
-private actor StubHealthLanguageModel: HealthLanguageModel {
+private actor StubDiaryLanguageModel: DiaryLanguageModel {
     private(set) var shortSummaryCalls = 0
     private(set) var receivedSummaries: [DiarySummary] = []
 
@@ -576,7 +644,7 @@ private actor StubHealthLanguageModel: HealthLanguageModel {
 
     func generateShortSummary(
         transcript: String,
-        profile: PatientProfile,
+        profile: UserProfile,
         onPartial: (@Sendable (String) -> Void)?
     ) async throws -> GeneratedText {
         shortSummaryCalls += 1
@@ -586,6 +654,7 @@ private actor StubHealthLanguageModel: HealthLanguageModel {
 
     func generateInsights(
         from summaries: [DiarySummary],
+        focus: DiaryFocus,
         period: String,
         onPartial: (@Sendable (String) -> Void)?
     ) async throws -> GeneratedText {
@@ -593,33 +662,7 @@ private actor StubHealthLanguageModel: HealthLanguageModel {
         onPartial?("You seem")
         return GeneratedText(
             text: "You seem steadier at weekends.",
-            promptText: PromptTemplate.weeklyInsights.filled(period: period, summaries: summaries)
+            promptText: PromptTemplate.weeklyInsights.filled(period: period, summaries: summaries, focus: focus)
         )
-    }
-}
-
-// The previous on-disk schema exists only here to exercise the upgrade path.
-private enum LegacyDiary {
-    @Model
-    final class DiaryEntryRecord {
-        @Attribute(.unique) var id: UUID
-        var patientID: UUID
-        var day: Date
-        var questions: [DiaryQuestion]
-        var promptText: String
-        var summaryShort: String
-        var summaryLong: String
-        var transcriptPath: String
-
-        init(entry: DiaryEntry) {
-            id = entry.id
-            patientID = entry.patientID
-            day = entry.day
-            questions = entry.questions
-            promptText = entry.promptText
-            summaryShort = entry.summaryShort
-            summaryLong = "Obsolete long summary"
-            transcriptPath = entry.transcriptPath
-        }
     }
 }

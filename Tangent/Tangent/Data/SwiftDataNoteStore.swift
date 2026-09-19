@@ -9,28 +9,28 @@ final class SwiftDataNoteStore: NoteStore {
         self.modelContext = modelContext
     }
 
-    func savePatientProfile(_ profile: PatientProfile) async throws {
-        if let record = try patientProfileRecord(id: profile.id) {
+    func saveUserProfile(_ profile: UserProfile) async throws {
+        if let record = try userProfileRecord(id: profile.id) {
             record.update(from: profile)
         } else {
-            modelContext.insert(PatientProfileRecord(profile: profile))
+            modelContext.insert(UserProfileRecord(profile: profile))
         }
         try modelContext.save()
     }
 
-    func patientProfile(id: UUID) async throws -> PatientProfile? {
-        try patientProfileRecord(id: id)?.domainModel
+    func userProfile(id: UUID) async throws -> UserProfile? {
+        try userProfileRecord(id: id)?.domainModel
     }
 
-    func patientProfiles() async throws -> [PatientProfile] {
-        let descriptor = FetchDescriptor<PatientProfileRecord>(
+    func userProfiles() async throws -> [UserProfile] {
+        let descriptor = FetchDescriptor<UserProfileRecord>(
             sortBy: [SortDescriptor(\.name)]
         )
         return try modelContext.fetch(descriptor).map(\.domainModel)
     }
 
-    func deletePatientProfile(id: UUID) async throws {
-        if let record = try patientProfileRecord(id: id) {
+    func deleteUserProfile(id: UUID) async throws {
+        if let record = try userProfileRecord(id: id) {
             modelContext.delete(record)
             try modelContext.save()
         }
@@ -76,12 +76,12 @@ final class SwiftDataNoteStore: NoteStore {
         try questionRecord(id: id)?.domainModel
     }
 
-    func questions(patientID: UUID?) async throws -> [Question] {
+    func questions(profileID: UUID?) async throws -> [Question] {
         var descriptor = FetchDescriptor<QuestionRecord>(
             sortBy: [SortDescriptor(\.text)]
         )
-        if let patientID {
-            descriptor.predicate = #Predicate { $0.patientID == patientID }
+        if let profileID {
+            descriptor.predicate = #Predicate { $0.profileID == profileID }
         }
         return try modelContext.fetch(descriptor).map(\.domainModel)
     }
@@ -106,12 +106,12 @@ final class SwiftDataNoteStore: NoteStore {
         try diaryEntryRecord(id: id)?.domainModel
     }
 
-    func diaryEntries(patientID: UUID?) async throws -> [DiaryEntry] {
+    func diaryEntries(profileID: UUID?) async throws -> [DiaryEntry] {
         var descriptor = FetchDescriptor<DiaryEntryRecord>(
             sortBy: [SortDescriptor(\.day, order: .reverse)]
         )
-        if let patientID {
-            descriptor.predicate = #Predicate { $0.patientID == patientID }
+        if let profileID {
+            descriptor.predicate = #Predicate { $0.profileID == profileID }
         }
         return try modelContext.fetch(descriptor).map(\.domainModel)
     }
@@ -150,8 +150,8 @@ final class SwiftDataNoteStore: NoteStore {
         }
     }
 
-    private func patientProfileRecord(id: UUID) throws -> PatientProfileRecord? {
-        let descriptor = FetchDescriptor<PatientProfileRecord>(
+    private func userProfileRecord(id: UUID) throws -> UserProfileRecord? {
+        let descriptor = FetchDescriptor<UserProfileRecord>(
             predicate: #Predicate { $0.id == id }
         )
         return try modelContext.fetch(descriptor).first

@@ -9,7 +9,7 @@ struct DailyTangentDetailsView: View {
     init(
         noteStore: any NoteStore,
         transcriber: (any Transcriber)? = nil,
-        healthModel: (any HealthLanguageModel)? = nil,
+        languageModel: (any DiaryLanguageModel)? = nil,
         diaryID: UUID,
         streamsTranscript: Bool = false,
         calendar: Calendar = .autoupdatingCurrent,
@@ -20,7 +20,7 @@ struct DailyTangentDetailsView: View {
             wrappedValue: DailyTangentDetailsViewModel(
                 noteStore: noteStore,
                 transcriber: transcriber,
-                healthModel: healthModel,
+                languageModel: languageModel,
                 diaryID: diaryID,
                 streamsTranscript: streamsTranscript
             )

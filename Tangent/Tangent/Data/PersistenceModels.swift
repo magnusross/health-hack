@@ -2,59 +2,59 @@ import Foundation
 import SwiftData
 
 @Model
-final class PatientProfileRecord {
+final class UserProfileRecord {
     @Attribute(.unique) var id: UUID
     var name: String
     var age: Int?
     var weight: Double?
     var gender: String
-    private var healthInterestsData: Data?
-    private var healthConcernsData: Data?
+    private var interestsData: Data?
+    private var concernsData: Data?
     var email: String
     var dailyReminder: Date?
 
-    var healthInterests: [String] {
-        get { StringArrayStorage.decode(healthInterestsData) }
-        set { healthInterestsData = StringArrayStorage.encode(newValue) }
+    var interests: [String] {
+        get { StringArrayStorage.decode(interestsData) }
+        set { interestsData = StringArrayStorage.encode(newValue) }
     }
 
-    var healthConcerns: [String] {
-        get { StringArrayStorage.decode(healthConcernsData) }
-        set { healthConcernsData = StringArrayStorage.encode(newValue) }
+    var concerns: [String] {
+        get { StringArrayStorage.decode(concernsData) }
+        set { concernsData = StringArrayStorage.encode(newValue) }
     }
 
-    init(profile: PatientProfile) {
+    init(profile: UserProfile) {
         id = profile.id
         name = profile.name
         age = profile.age
         weight = profile.weight
         gender = profile.gender
-        healthInterestsData = StringArrayStorage.encode(profile.healthInterests)
-        healthConcernsData = StringArrayStorage.encode(profile.healthConcerns)
+        interestsData = StringArrayStorage.encode(profile.interests)
+        concernsData = StringArrayStorage.encode(profile.concerns)
         email = profile.email
         dailyReminder = profile.dailyReminder
     }
 
-    func update(from profile: PatientProfile) {
+    func update(from profile: UserProfile) {
         name = profile.name
         age = profile.age
         weight = profile.weight
         gender = profile.gender
-        healthInterests = profile.healthInterests
-        healthConcerns = profile.healthConcerns
+        interests = profile.interests
+        concerns = profile.concerns
         email = profile.email
         dailyReminder = profile.dailyReminder
     }
 
-    var domainModel: PatientProfile {
-        PatientProfile(
+    var domainModel: UserProfile {
+        UserProfile(
             id: id,
             name: name,
             age: age,
             weight: weight,
             gender: gender,
-            healthInterests: healthInterests,
-            healthConcerns: healthConcerns,
+            interests: interests,
+            concerns: concerns,
             email: email,
             dailyReminder: dailyReminder
         )
@@ -90,19 +90,19 @@ final class PromptRecord {
 @Model
 final class QuestionRecord {
     @Attribute(.unique) var id: UUID
-    var patientID: UUID
+    @Attribute(originalName: "patientID") var profileID: UUID
     var promptText: String
     var text: String
 
     init(question: Question) {
         id = question.id
-        patientID = question.patientID
+        profileID = question.profileID
         promptText = question.promptText
         text = question.text
     }
 
     func update(from question: Question) {
-        patientID = question.patientID
+        profileID = question.profileID
         promptText = question.promptText
         text = question.text
     }
@@ -110,7 +110,7 @@ final class QuestionRecord {
     var domainModel: Question {
         Question(
             id: id,
-            patientID: patientID,
+            profileID: profileID,
             promptText: promptText,
             text: text
         )
@@ -120,7 +120,7 @@ final class QuestionRecord {
 @Model
 final class DiaryEntryRecord {
     @Attribute(.unique) var id: UUID
-    var patientID: UUID
+    @Attribute(originalName: "patientID") var profileID: UUID
     var day: Date
     var questions: [DiaryQuestion]
     var promptText: String
@@ -129,7 +129,7 @@ final class DiaryEntryRecord {
 
     init(entry: DiaryEntry) {
         id = entry.id
-        patientID = entry.patientID
+        profileID = entry.profileID
         day = entry.day
         questions = entry.questions
         promptText = entry.promptText
@@ -138,7 +138,7 @@ final class DiaryEntryRecord {
     }
 
     func update(from entry: DiaryEntry) {
-        patientID = entry.patientID
+        profileID = entry.profileID
         day = entry.day
         questions = entry.questions
         promptText = entry.promptText
@@ -149,7 +149,7 @@ final class DiaryEntryRecord {
     var domainModel: DiaryEntry {
         DiaryEntry(
             id: id,
-            patientID: patientID,
+            profileID: profileID,
             day: day,
             questions: questions,
             promptText: promptText,

@@ -11,7 +11,7 @@ struct TangentApp: App {
         do {
             let modelContainer = try TangentModelContainer.make()
             self.modelContainer = modelContainer
-            try PatientSeeder.seedIfNeeded(
+            try ProfileSeeder.seedIfNeeded(
                 in: modelContainer.mainContext
             )
             try PromptSeeder.seedPrompts(
@@ -26,7 +26,7 @@ struct TangentApp: App {
                 ),
                 audioRecorder: AVAudioRecorderService(),
                 transcriber: OnDeviceTranscriber(),
-                healthModel: Self.makeHealthModel(),
+                languageModel: Self.makeLanguageModel(),
                 modelCatalog: MLXModelCatalog(),
                 reminderScheduler: LocalReminderScheduler()
             )
@@ -37,11 +37,11 @@ struct TangentApp: App {
 
     /// MLX needs a Metal GPU, which the simulator does not have. Summaries
     /// then fail cleanly instead of crashing inside Metal.
-    private static func makeHealthModel() -> any HealthLanguageModel {
+    private static func makeLanguageModel() -> any DiaryLanguageModel {
         #if targetEnvironment(simulator)
-        UnavailableHealthLanguageModel()
+        UnavailableDiaryLanguageModel()
         #else
-        MLXHealthLanguageModel()
+        MLXDiaryLanguageModel()
         #endif
     }
 

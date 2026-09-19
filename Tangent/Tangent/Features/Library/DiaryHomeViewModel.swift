@@ -27,11 +27,11 @@ final class DiaryHomeViewModel: ObservableObject {
 
     func load() async {
         do {
-            let currentPatient = try await noteStore.patientProfiles().first
+            let currentProfile = try await noteStore.userProfiles().first
             let entries: [DiaryEntry]
-            if let currentPatient {
+            if let currentProfile {
                 entries = try await noteStore.diaryEntries(
-                    patientID: currentPatient.id
+                    profileID: currentProfile.id
                 )
             } else {
                 entries = []

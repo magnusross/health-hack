@@ -1,13 +1,14 @@
 import Foundation
 
-struct PatientProfile: Identifiable, Equatable, Sendable {
+struct UserProfile: Identifiable, Equatable, Sendable {
     let id: UUID
     var name: String
+    // Retained for existing profiles; not shown in Settings or included in model prompts.
     var age: Int?
     var weight: Double?
     var gender: String
-    var healthInterests: [String]
-    var healthConcerns: [String]
+    var interests: [String]
+    var concerns: [String]
     var email: String
     var dailyReminder: Date?
 
@@ -17,8 +18,8 @@ struct PatientProfile: Identifiable, Equatable, Sendable {
         age: Int? = nil,
         weight: Double? = nil,
         gender: String = "",
-        healthInterests: [String] = [],
-        healthConcerns: [String] = [],
+        interests: [String] = [],
+        concerns: [String] = [],
         email: String = "",
         dailyReminder: Date? = nil
     ) {
@@ -27,11 +28,16 @@ struct PatientProfile: Identifiable, Equatable, Sendable {
         self.age = age
         self.weight = weight
         self.gender = gender
-        self.healthInterests = healthInterests
-        self.healthConcerns = healthConcerns
+        self.interests = interests
+        self.concerns = concerns
         self.email = email
         self.dailyReminder = dailyReminder
     }
+}
+
+struct DiaryFocus: Equatable, Sendable {
+    var interests: [String] = []
+    var concerns: [String] = []
 }
 
 struct Prompt: Identifiable, Equatable, Sendable {
@@ -46,18 +52,18 @@ struct Prompt: Identifiable, Equatable, Sendable {
 
 struct Question: Identifiable, Equatable, Sendable {
     let id: UUID
-    let patientID: UUID
+    let profileID: UUID
     var promptText: String
     var text: String
 
     init(
         id: UUID = UUID(),
-        patientID: UUID,
+        profileID: UUID,
         promptText: String,
         text: String
     ) {
         self.id = id
-        self.patientID = patientID
+        self.profileID = profileID
         self.promptText = promptText
         self.text = text
     }
@@ -75,7 +81,7 @@ struct DiaryQuestion: Identifiable, Equatable, Codable, Sendable {
 
 struct DiaryEntry: Identifiable, Equatable, Sendable {
     let id: UUID
-    let patientID: UUID
+    let profileID: UUID
     var day: Date
     var questions: [DiaryQuestion]
     var promptText: String
@@ -84,7 +90,7 @@ struct DiaryEntry: Identifiable, Equatable, Sendable {
 
     init(
         id: UUID = UUID(),
-        patientID: UUID,
+        profileID: UUID,
         day: Date,
         questions: [DiaryQuestion] = [],
         promptText: String,
@@ -92,7 +98,7 @@ struct DiaryEntry: Identifiable, Equatable, Sendable {
         transcriptPath: String = ""
     ) {
         self.id = id
-        self.patientID = patientID
+        self.profileID = profileID
         self.day = day
         self.questions = questions
         self.promptText = promptText

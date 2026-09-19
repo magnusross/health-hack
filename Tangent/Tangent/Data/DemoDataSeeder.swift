@@ -5,45 +5,45 @@ enum DemoDataSeeder {
     @MainActor
     static func seedIfNeeded(in modelContext: ModelContext) throws {
         #if DEBUG
-        // The patient is seeded in every build by `PatientSeeder`; this only
+        // The user is seeded in every build by `ProfileSeeder`; this only
         // adds demo history on top of them.
         guard let profile = try modelContext.fetch(
-            FetchDescriptor<PatientProfileRecord>(sortBy: [SortDescriptor(\.name)])
+            FetchDescriptor<UserProfileRecord>(sortBy: [SortDescriptor(\.name)])
         ).first else {
             return
         }
 
-        // Questions belong to PatientSeeder, which runs first in every build
-        // and owns the patient's real standing set.
+        // Questions belong to ProfileSeeder, which runs first in every build
+        // and owns the user's real standing set.
 
         let existingEntries = try modelContext.fetch(
             FetchDescriptor<DiaryEntryRecord>()
         )
-        let patientEntries = existingEntries.filter { $0.patientID == profile.id }
-        let hasRealEntries = patientEntries.contains {
+        let profileEntries = existingEntries.filter { $0.profileID == profile.id }
+        let hasRealEntries = profileEntries.contains {
             $0.promptText != Self.demoPrompt
         }
         let calendar = Calendar.autoupdatingCurrent
         let today = calendar.startOfDay(for: Date())
         if !hasRealEntries {
-            for entry in patientEntries {
+            for entry in profileEntries {
                 modelContext.delete(entry)
             }
 
             // A couple of empty gaps (including yesterday) so filled vs empty
             // cards stay easy to tell apart. Today stays empty for recording.
             let examples: [(daysAgo: Int, summary: String)] = [
-                (14, "I slept restlessly and woke up with a tight neck."),
-                (13, "A slow morning, but a walk after lunch lifted my mood."),
-                (12, "Stress sat in my chest during work. Evening stretching helped."),
-                (10, "I slept more deeply and woke up feeling refreshed."),
-                (9, "Energy was steady until late afternoon, then I faded."),
-                (8, "A mild headache appeared after lunch but eased by evening."),
-                (7, "I drank more water and felt clearer by mid-afternoon."),
-                (6, "My shoulders were tense. A short stretch before bed helped."),
-                (4, "I felt calmer today and had steady energy throughout the day."),
-                (3, "Sleep came easily. I woke up without the usual grogginess."),
-                (2, "A little anxious before a meeting, then lighter afterward."),
+                (14, "I started sketching ideas for a small creative project."),
+                (13, "A conversation with a friend helped me see my idea differently."),
+                (12, "I kept switching tasks and left my draft unfinished."),
+                (10, "I made progress after setting aside a quiet hour."),
+                (9, "I learned a new guitar chord and enjoyed practising it."),
+                (8, "I struggled to find time for reading after a busy day."),
+                (7, "I finished a chapter and wrote down an idea to try."),
+                (6, "I asked for feedback and found one useful change to make."),
+                (4, "I felt pleased with the progress on my draft."),
+                (3, "I tried a new recipe with friends and enjoyed the evening."),
+                (2, "I chose one task to focus on tomorrow instead of a long list."),
             ]
 
             for example in examples {
@@ -56,10 +56,10 @@ enum DemoDataSeeder {
                 }
 
                 let entry = DiaryEntry(
-                    patientID: profile.id,
+                    profileID: profile.id,
                     day: day,
                     questions: [
-                        DiaryQuestion(text: "How have you been feeling?")
+                        DiaryQuestion(text: "What stood out to you today?")
                     ],
                     promptText: Self.demoPrompt,
                     summaryShort: example.summary,
@@ -75,7 +75,11 @@ enum DemoDataSeeder {
         let existingInsights = try modelContext.fetch(
             FetchDescriptor<InsightRecord>()
         )
-        if existingInsights.isEmpty,
+        // Refresh only the built-in demo insight; keep user-generated insights.
+        for insight in existingInsights where insight.promptText == Self.demoInsightPrompt {
+            modelContext.delete(insight)
+        }
+        if existingInsights.allSatisfy({ $0.promptText == Self.demoInsightPrompt }),
            let generatedFrom = calendar.date(
                byAdding: .day,
                value: -14,
@@ -91,7 +95,7 @@ enum DemoDataSeeder {
                 generatedFrom: generatedFrom,
                 generatedTo: generatedTo,
                 promptText: Self.demoInsightPrompt,
-                text: "Your sleep and energy appear steadier on days when you take a walk or stretch. Headaches have been brief and often improve by the evening."
+                text: "You returned to your creative project several times. Setting aside a quiet hour and asking for feedback appeared in the entries where you described progress."
             )
             modelContext.insert(InsightRecord(insight: insight))
         }
@@ -114,7 +118,7 @@ enum DemoDataSeeder {
             withIntermediateDirectories: true
         )
         let url = directory.appending(path: "tangent-\(daysAgo)-days-ago.txt")
-        let transcript = "Hi. I wanted to check in about today. \(summary) Overall, I am paying attention to how rest, movement, and stress affect how I feel."
+        let transcript = "Hi. I wanted to check in about today. \(summary) I want to remember what I tried and what I learned."
         try transcript.write(to: url, atomically: true, encoding: .utf8)
         return url.path
     }

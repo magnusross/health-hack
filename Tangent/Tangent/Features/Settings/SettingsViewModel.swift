@@ -3,13 +3,10 @@ import Foundation
 
 @MainActor
 final class SettingsViewModel: ObservableObject {
-    @Published private(set) var name = "—"
-    @Published private(set) var age = "—"
-    @Published private(set) var weight = "—"
-    @Published private(set) var gender = "—"
-    @Published private(set) var healthInterests = "—"
-    @Published private(set) var healthConcerns = "—"
-    @Published private(set) var email = "—"
+    @Published var name = ""
+    @Published var interests = ""
+    @Published var concerns = ""
+    @Published private(set) var isSavingProfile = false
     @Published private(set) var reminderEnabled = true
     @Published private(set) var dailyReminder = SettingsViewModel.defaultReminderTime()
 
@@ -26,7 +23,7 @@ final class SettingsViewModel: ObservableObject {
     private let noteStore: any NoteStore
     private let reminderScheduler: any ReminderScheduler
     private let modelCatalog: (any ModelCatalog)?
-    private var profile: PatientProfile?
+    private var profile: UserProfile?
 
     init(
         noteStore: any NoteStore,
@@ -42,8 +39,8 @@ final class SettingsViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         do {
-            guard let profile = try await noteStore.patientProfiles().first else {
-                message = "No patient profile is available."
+            guard let profile = try await noteStore.userProfiles().first else {
+                message = "No user profile is available."
                 return
             }
             apply(profile)
@@ -73,7 +70,7 @@ final class SettingsViewModel: ObservableObject {
                 profile.dailyReminder = nil
                 reminderScheduler.cancelDailyReminder()
             }
-            try await noteStore.savePatientProfile(profile)
+            try await noteStore.saveUserProfile(profile)
             self.profile = profile
             message = nil
         } catch {
@@ -82,6 +79,28 @@ final class SettingsViewModel: ObservableObject {
             self.profile = profile
             message = error.localizedDescription
         }
+    }
+
+    func saveProfile() async {
+        guard var profile, !isSavingProfile else { return }
+        isSavingProfile = true
+        defer { isSavingProfile = false }
+        profile.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        profile.interests = Self.lines(interests)
+        profile.concerns = Self.lines(concerns)
+        do {
+            try await noteStore.saveUserProfile(profile)
+            self.profile = profile
+            message = "Profile saved."
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    private static func lines(_ text: String) -> [String] {
+        text.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
     }
 
     func setReminderTime(_ time: Date) async {
@@ -94,7 +113,7 @@ final class SettingsViewModel: ObservableObject {
         do {
             profile.dailyReminder = time
             try await reminderScheduler.scheduleDailyReminder(at: time)
-            try await noteStore.savePatientProfile(profile)
+            try await noteStore.saveUserProfile(profile)
             self.profile = profile
             message = nil
         } catch {
@@ -108,11 +127,11 @@ final class SettingsViewModel: ObservableObject {
     func prepareExport() async {
         guard let profileID else { return }
         do {
-            let entries = try await noteStore.diaryEntries(patientID: profileID)
+            let entries = try await noteStore.diaryEntries(profileID: profileID)
             exportDocument = SettingsExportDocument(
                 data: DiaryXMLExporter.makeDocument(
                     entries: entries,
-                    patientID: profileID
+                    profileID: profileID
                 )
             )
             showsExporter = true
@@ -231,22 +250,12 @@ final class SettingsViewModel: ObservableObject {
         return dailyReminder.formatted(date: .omitted, time: .shortened)
     }
 
-    private func apply(_ profile: PatientProfile) {
+    private func apply(_ profile: UserProfile) {
         self.profile = profile
         profileID = profile.id
         name = profile.name
-        age = profile.age.map(String.init) ?? "—"
-        weight = profile.weight.map {
-            $0.formatted(.number.precision(.fractionLength(0...2))) + " kg"
-        } ?? "—"
-        gender = profile.gender.isEmpty ? "—" : profile.gender
-        healthInterests = profile.healthInterests.isEmpty
-            ? "—"
-            : profile.healthInterests.joined(separator: ", ")
-        healthConcerns = profile.healthConcerns.isEmpty
-            ? "—"
-            : profile.healthConcerns.joined(separator: ", ")
-        email = profile.email.isEmpty ? "—" : profile.email
+        interests = profile.interests.joined(separator: "\n")
+        concerns = profile.concerns.joined(separator: "\n")
         reminderEnabled = profile.dailyReminder != nil
         dailyReminder = profile.dailyReminder ?? Self.defaultReminderTime()
     }

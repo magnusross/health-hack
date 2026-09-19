@@ -12,18 +12,18 @@ final class InsightsViewModel: ObservableObject {
     @Published private(set) var toDate: Date
 
     private let noteStore: any NoteStore
-    private let healthModel: any HealthLanguageModel
+    private let languageModel: any DiaryLanguageModel
     private let calendar: Calendar
     private let maximumToDate: Date
 
     init(
         noteStore: any NoteStore,
-        healthModel: any HealthLanguageModel,
+        languageModel: any DiaryLanguageModel,
         calendar: Calendar = .autoupdatingCurrent,
         now: Date = Date()
     ) {
         self.noteStore = noteStore
-        self.healthModel = healthModel
+        self.languageModel = languageModel
         self.calendar = calendar
         let today = calendar.startOfDay(for: now)
         maximumToDate = today
@@ -57,8 +57,8 @@ final class InsightsViewModel: ObservableObject {
         defer { isGenerating = false }
 
         do {
-            let patientID = try await noteStore.patientProfiles().first?.id
-            let entries = try await noteStore.diaryEntries(patientID: patientID)
+            let profile = try await noteStore.userProfiles().first
+            let entries = try await noteStore.diaryEntries(profileID: profile?.id)
             let endExclusive = calendar.date(
                 byAdding: .day,
                 value: 1,
@@ -69,10 +69,11 @@ final class InsightsViewModel: ObservableObject {
             }
             let summaries = selectedEntries.compactMap(DiarySummary.init)
             guard !summaries.isEmpty else {
-                throw HealthLanguageModelError.notEnoughEntries
+                throw DiaryLanguageModelError.notEnoughEntries
             }
-            let generated = try await healthModel.generateInsights(
+            let generated = try await languageModel.generateInsights(
                 from: summaries,
+                focus: profile?.focus ?? DiaryFocus(),
                 period: periodDescription,
                 onPartial: { [weak self] partial in
                     Task { @MainActor in

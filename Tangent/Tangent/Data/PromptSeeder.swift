@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import SwiftData
 
 /// Keeps the app's prompts in the PROMPT table, as `rules.txt` describes.
@@ -15,7 +16,7 @@ enum PromptSeeder {
         ]
         let existing = try modelContext.fetch(FetchDescriptor<PromptRecord>())
         var didChange = false
-        for record in existing where record.text == retiredDailySummary.text {
+        for record in existing where retiredTemplateDigests.contains(Self.digest(record.text)) {
             modelContext.delete(record)
             didChange = true
         }
@@ -31,21 +32,15 @@ enum PromptSeeder {
         }
     }
 
-    // Migration cleanup for the obsolete built-in prompt. Never used for generation.
-    private static let retiredDailySummary = PromptTemplate(
-        text: """
-        You are a helpful medical assistant. You are summarising one entry in a private
-        voice diary.
+    // Exact fingerprints of the retired built-in templates, in order:
+    // health-focused short summary, health-focused insights, obsolete long summary.
+    private static let retiredTemplateDigests: Set<String> = [
+        "f6e99864da1e898426abe994be7d99101c8b92243d6cd7740dee96879805f289",
+        "580efd88e2bfd7a7f34a7a1a9bf7a471b3b72e234a073b00dd5884f16f04b5a2",
+        "fe4fc036db776fc67cfdab5b988b2810b3996986c45327e13ec5074ebe5d86e4",
+    ]
 
-        Each sentence should be a single fact from the transcript. It should be in passive voice.\u{20}
-        Always refer to the user.
-
-        Use the profile below to judge what to foreground. Do not treat anything in it
-        as something said in this entry.
-
-        USER PROFILE: {user_profile}
-
-        TRANSCRIPT: {transcript}
-        """
-    )
+    private static func digest(_ text: String) -> String {
+        SHA256.hash(data: Data(text.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
 }

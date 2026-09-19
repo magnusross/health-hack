@@ -3,18 +3,18 @@ import Foundation
 enum DiaryXMLExporter {
     static func makeDocument(
         entries: [DiaryEntry],
-        patientID: UUID,
+        profileID: UUID,
         generatedAt: Date = Date()
     ) -> Data {
         let sortedEntries = entries.sorted { $0.day < $1.day }
         var lines = [
             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
-            "<tangent-diary patient-id=\"\(patientID.uuidString)\" generated-at=\"\(dateString(generatedAt))\">",
+            "<tangent-diary profile-id=\"\(profileID.uuidString)\" generated-at=\"\(dateString(generatedAt))\">",
         ]
 
         for entry in sortedEntries {
             lines.append("  <entry id=\"\(entry.id.uuidString)\">")
-            lines.append("    <patient-id>\(entry.patientID.uuidString)</patient-id>")
+            lines.append("    <profile-id>\(entry.profileID.uuidString)</profile-id>")
             lines.append("    <day>\(dateString(entry.day))</day>")
             lines.append("    <questions>")
             for question in entry.questions {

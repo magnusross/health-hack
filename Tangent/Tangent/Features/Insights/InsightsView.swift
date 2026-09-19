@@ -5,12 +5,12 @@ struct InsightsView: View {
 
     init(
         noteStore: any NoteStore,
-        healthModel: any HealthLanguageModel
+        languageModel: any DiaryLanguageModel
     ) {
         _model = StateObject(
             wrappedValue: InsightsViewModel(
                 noteStore: noteStore,
-                healthModel: healthModel
+                languageModel: languageModel
             )
         )
     }
@@ -181,7 +181,7 @@ struct InsightsView: View {
     NavigationStack {
         InsightsView(
             noteStore: SwiftDataNoteStore(modelContext: container.mainContext),
-            healthModel: UnavailableHealthLanguageModel()
+            languageModel: UnavailableDiaryLanguageModel()
         )
     }
 }

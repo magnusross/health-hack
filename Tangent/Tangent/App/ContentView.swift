@@ -30,7 +30,7 @@ struct ContentView: View {
                         DailyTangentDetailsView(
                             noteStore: dependencies.noteStore,
                             transcriber: dependencies.transcriber,
-                            healthModel: dependencies.healthModel,
+                            languageModel: dependencies.languageModel,
                             diaryID: diaryID,
                             redoToday: startNewRecording,
                             openSettings: { diaryPath.append(.settings) }
@@ -39,7 +39,7 @@ struct ContentView: View {
                         DailyTangentDetailsView(
                             noteStore: dependencies.noteStore,
                             transcriber: dependencies.transcriber,
-                            healthModel: dependencies.healthModel,
+                            languageModel: dependencies.languageModel,
                             diaryID: diaryID,
                             streamsTranscript: true,
                             redoToday: startNewRecording,
@@ -67,7 +67,7 @@ struct ContentView: View {
                     audioRecorder: dependencies.audioRecorder,
                     transcriber: dependencies.transcriber,
                     noteStore: dependencies.noteStore,
-                    healthModel: dependencies.healthModel,
+                    languageModel: dependencies.languageModel,
                     openSettings: { recordPath.append(.settings) },
                     onRecordingFinished: showDailySummary(for:),
                     isActive: selectedTab == .record
@@ -95,7 +95,7 @@ struct ContentView: View {
             NavigationStack {
                 InsightsView(
                     noteStore: dependencies.noteStore,
-                    healthModel: dependencies.healthModel
+                    languageModel: dependencies.languageModel
                 )
                 .tangentLogoToolbar()
             }
@@ -188,7 +188,7 @@ private enum RecordRoute: Hashable {
             noteStore: SwiftDataNoteStore(modelContext: container.mainContext),
             audioRecorder: UnavailableAudioRecorder(),
             transcriber: UnavailableTranscriber(),
-            healthModel: UnavailableHealthLanguageModel(),
+            languageModel: UnavailableDiaryLanguageModel(),
             modelCatalog: MLXModelCatalog(),
             reminderScheduler: UnavailableReminderScheduler()
         )

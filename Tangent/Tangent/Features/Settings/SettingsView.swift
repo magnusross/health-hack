@@ -1,7 +1,9 @@
 import SwiftUI
 
 struct SettingsView: View {
+    private enum ProfileField: Hashable { case name, interests, concerns }
     @StateObject private var model: SettingsViewModel
+    @FocusState private var focusedProfileField: ProfileField?
 
     init(
         noteStore: any NoteStore,
@@ -20,7 +22,7 @@ struct SettingsView: View {
     var body: some View {
         Form {
             profileSection
-            healthContextSection
+            focusSection
             reminderSection
             modelSection
             privacySection
@@ -36,8 +38,12 @@ struct SettingsView: View {
         .toolbarVisibility(.hidden, for: .tabBar)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button("Edit") {}
-                    .accessibilityHint("Profile editing is not available yet")
+                Button("Save") {
+                    focusedProfileField = nil
+                    Task { await model.saveProfile() }
+                }
+                    .disabled(model.isLoading || model.isSavingProfile)
+                    .accessibilityIdentifier("save-profile")
             }
         }
         .safeAreaInset(edge: .bottom) {
@@ -72,18 +78,26 @@ struct SettingsView: View {
 
     private var profileSection: some View {
         Section("Profile") {
-            LabeledContent("Name", value: model.name)
-            LabeledContent("Age", value: model.age)
-            LabeledContent("Weight", value: model.weight)
-            LabeledContent("Gender", value: model.gender)
-            LabeledContent("Email", value: model.email)
+            TextField("Name", text: $model.name)
+                .accessibilityIdentifier("profile-name")
+                .focused($focusedProfileField, equals: .name)
         }
     }
 
-    private var healthContextSection: some View {
-        Section("Health context") {
-            LabeledContent("Health interests", value: model.healthInterests)
-            LabeledContent("Health concerns", value: model.healthConcerns)
+    private var focusSection: some View {
+        Section {
+            TextField("Interests — what would you like to explore?", text: $model.interests, axis: .vertical)
+                .lineLimit(2...5)
+                .accessibilityIdentifier("profile-interests")
+                .focused($focusedProfileField, equals: .interests)
+            TextField("Concerns — what is on your mind?", text: $model.concerns, axis: .vertical)
+                .lineLimit(2...5)
+                .accessibilityIdentifier("profile-concerns")
+                .focused($focusedProfileField, equals: .concerns)
+        } header: {
+            Text("Your focus")
+        } footer: {
+            Text("Write about anything: projects, relationships, learning, routines, or ideas. Add one topic per line and tap Save.")
         }
     }
 
@@ -183,6 +197,12 @@ struct SettingsView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("model-\(summaryModel.rawValue)")
+            .accessibilityValue(isSelected ? "Selected" : "Not selected")
+
+            Text(summaryModel.description)
+                .font(.footnote)
+                .foregroundStyle(Color.tangentInk.opacity(0.65))
 
             modelStatus(summaryModel, state: state)
         }

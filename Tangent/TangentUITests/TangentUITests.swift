@@ -50,6 +50,28 @@ final class TangentUITests: XCTestCase {
     }
 
     @MainActor
+    func testGeneralProfileAndModelChoices() throws {
+        let app = XCUIApplication()
+        app.launch()
+        app.buttons["Settings"].tap()
+        XCTAssertTrue(app.textFields["profile-name"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.staticTexts["Health context"].exists)
+        let interests = app.descendants(matching: .any).matching(identifier: "profile-interests").firstMatch
+        XCTAssertTrue(interests.exists)
+        interests.tap()
+        interests.typeText("Creative writing")
+        app.buttons["save-profile"].tap()
+
+        let qwen = app.buttons["model-qwen2.5-0.5b-instruct-4bit"]
+        for _ in 0..<5 where !qwen.isHittable { app.swipeUp() }
+        XCTAssertTrue(qwen.isHittable)
+        qwen.tap()
+        XCTAssertEqual(qwen.value as? String, "Selected")
+        // Choosing a model is a preference; it must not start downloading weights.
+        XCTAssertFalse(app.buttons["Cancel"].exists)
+    }
+
+    @MainActor
     func testLaunchPerformance() throws {
         if #available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 7.0, *) {
             // This measures how long it takes to launch your application.

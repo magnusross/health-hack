@@ -36,20 +36,20 @@ final class DailyTangentDetailsViewModel: ObservableObject {
 
     private let noteStore: any NoteStore
     private let transcriber: (any Transcriber)?
-    private let healthModel: (any HealthLanguageModel)?
+    private let languageModel: (any DiaryLanguageModel)?
     private let diaryID: UUID
     let streamsTranscript: Bool
 
     init(
         noteStore: any NoteStore,
         transcriber: (any Transcriber)? = nil,
-        healthModel: (any HealthLanguageModel)? = nil,
+        languageModel: (any DiaryLanguageModel)? = nil,
         diaryID: UUID,
         streamsTranscript: Bool = false
     ) {
         self.noteStore = noteStore
         self.transcriber = transcriber
-        self.healthModel = healthModel
+        self.languageModel = languageModel
         self.diaryID = diaryID
         self.streamsTranscript = streamsTranscript
     }
@@ -106,7 +106,7 @@ final class DailyTangentDetailsViewModel: ObservableObject {
     /// model was available.
     func regenerate() async {
         guard let transcript = usableTranscript,
-              let profile = try? await noteStore.patientProfiles().first
+              let profile = try? await noteStore.userProfiles().first
         else {
             return
         }
@@ -195,7 +195,7 @@ final class DailyTangentDetailsViewModel: ObservableObject {
     private func generateSummaryIfNeeded() async {
         guard !isGenerating,
               let transcript = usableTranscript,
-              let profile = try? await noteStore.patientProfiles().first
+              let profile = try? await noteStore.userProfiles().first
         else {
             return
         }
@@ -204,13 +204,13 @@ final class DailyTangentDetailsViewModel: ObservableObject {
         await generateSummary(profile: profile, transcript: transcript)
     }
 
-    private func generateSummary(profile: PatientProfile, transcript: String) async {
-        guard let healthModel, let entry else { return }
+    private func generateSummary(profile: UserProfile, transcript: String) async {
+        guard let languageModel, let entry else { return }
 
         streamingShortSummary = ""
         summaryState = .generating
         do {
-            let short = try await healthModel.generateShortSummary(
+            let short = try await languageModel.generateShortSummary(
                 transcript: transcript,
                 profile: profile,
                 onPartial: { [weak self] partial in
@@ -246,7 +246,7 @@ final class DailyTangentDetailsViewModel: ObservableObject {
     }
 
     private static func needsModel(_ error: Error) -> Bool {
-        guard let error = error as? HealthLanguageModelError else { return false }
+        guard let error = error as? DiaryLanguageModelError else { return false }
         if case .modelNotDownloaded = error { return true }
         return false
     }

@@ -8,6 +8,8 @@ import MLXVLM
 extension SummaryModelID {
     var configuration: ModelConfiguration {
         switch self {
+        case .qwen3_0_6B, .qwen2_5_0_5B, .qwen3_1_7B:
+            ModelConfiguration(id: repoID, extraEOSTokens: ["<|im_end|>"])
         case .gemma3_1B:
             LLMRegistry.gemma3_1B_qat_4bit
         case .medgemma4B:
@@ -20,7 +22,7 @@ extension SummaryModelID {
     /// only ever sends it text. Attaching no images is fine.
     var factory: any ModelFactory {
         switch self {
-        case .gemma3_1B:
+        case .gemma3_1B, .qwen3_0_6B, .qwen2_5_0_5B, .qwen3_1_7B:
             LLMModelFactory.shared
         case .medgemma4B:
             VLMModelFactory.shared

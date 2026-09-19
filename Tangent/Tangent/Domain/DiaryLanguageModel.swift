@@ -16,7 +16,7 @@ struct GeneratedText: Equatable, Sendable {
 ///
 /// Generates one short summary per entry and insights from saved short summaries.
 /// Implementations must be safe to call off the main actor and honour cancellation.
-protocol HealthLanguageModel: AnyObject, Sendable {
+protocol DiaryLanguageModel: AnyObject, Sendable {
     /// Loads the selected model into memory if its weights are on disk.
     ///
     /// Called when a recording starts so the wait after transcription is
@@ -28,19 +28,20 @@ protocol HealthLanguageModel: AnyObject, Sendable {
     ///   show it filling in.
     func generateShortSummary(
         transcript: String,
-        profile: PatientProfile,
+        profile: UserProfile,
         onPartial: (@Sendable (String) -> Void)?
     ) async throws -> GeneratedText
 
-    /// Receives dates and short summaries only, with no transcript or profile access.
+    /// Receives dates and short summaries and reflection interests, with no transcript access.
     func generateInsights(
         from summaries: [DiarySummary],
+        focus: DiaryFocus,
         period: String,
         onPartial: (@Sendable (String) -> Void)?
     ) async throws -> GeneratedText
 }
 
-enum HealthLanguageModelError: LocalizedError, Equatable {
+enum DiaryLanguageModelError: LocalizedError, Equatable {
     /// No Metal GPU, so no on-device inference. The Simulator lands here.
     case unsupportedDevice
     case modelNotDownloaded(SummaryModelID)

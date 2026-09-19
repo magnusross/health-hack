@@ -17,7 +17,7 @@ final class RecordHomeViewModel: ObservableObject {
     private let audioRecorder: any AudioRecorder
     private let transcriber: any Transcriber
     private let noteStore: any NoteStore
-    private let healthModel: (any HealthLanguageModel)?
+    private let languageModel: (any DiaryLanguageModel)?
     private var elapsedTask: Task<Void, Never>?
     private var questionTask: Task<Void, Never>?
     private var suggestionOfferTask: Task<Void, Never>?
@@ -30,7 +30,7 @@ final class RecordHomeViewModel: ObservableObject {
         audioRecorder: any AudioRecorder,
         transcriber: any Transcriber,
         noteStore: any NoteStore,
-        healthModel: (any HealthLanguageModel)? = nil,
+        languageModel: (any DiaryLanguageModel)? = nil,
         initialQuestionDelay: Duration = .seconds(3),
         questionInterval: Duration = .seconds(10),
         questionTransitionDelay: Duration = .milliseconds(2200)
@@ -38,7 +38,7 @@ final class RecordHomeViewModel: ObservableObject {
         self.audioRecorder = audioRecorder
         self.transcriber = transcriber
         self.noteStore = noteStore
-        self.healthModel = healthModel
+        self.languageModel = languageModel
         self.initialQuestionDelay = initialQuestionDelay
         self.questionInterval = questionInterval
         self.questionTransitionDelay = questionTransitionDelay
@@ -75,9 +75,9 @@ final class RecordHomeViewModel: ObservableObject {
 
             // Warm the model while the user talks. By the time they stop and
             // the transcript is ready, the weights are already in memory.
-            if let healthModel {
+            if let languageModel {
                 Task.detached(priority: .utility) {
-                    await healthModel.prepare()
+                    await languageModel.prepare()
                 }
             }
         } catch {
@@ -120,19 +120,19 @@ final class RecordHomeViewModel: ObservableObject {
         await startQuestionStream()
     }
 
-    /// Saves the entry with the audio path and the questions the patient was
+    /// Saves the entry with the audio path and the questions the user was
     /// actually shown. The transcript and short summary are filled in on the
     /// daily details screen.
     private func saveTodayEntry(
         transcriptPath: String,
         questions: [DiaryQuestion]
     ) async throws -> UUID {
-        guard let patient = try await noteStore.patientProfiles().first else {
+        guard let user = try await noteStore.userProfiles().first else {
             throw RecordPersistenceError.missingProfile
         }
 
         let entry = DiaryEntry(
-            patientID: patient.id,
+            profileID: user.id,
             day: Date(),
             questions: questions,
             promptText: "Daily Tangent recorded and transcribed on device",
@@ -174,8 +174,8 @@ final class RecordHomeViewModel: ObservableObject {
     }
 
     private func startQuestionStream() async {
-        guard let patientID = try? await noteStore.patientProfiles().first?.id,
-              let questions = try? await noteStore.questions(patientID: patientID),
+        guard let profileID = try? await noteStore.userProfiles().first?.id,
+              let questions = try? await noteStore.questions(profileID: profileID),
               !questions.isEmpty,
               isRecording
         else {

@@ -16,15 +16,15 @@ Features depend on domain models and protocols. `Data` and `Services` implement 
 
 ## Persistence
 
-`TangentModelContainer` owns the schema for patient profiles, prompts, questions, diary entries, and insights. `SwiftDataNoteStore` provides async CRUD-style operations and converts between SwiftData records and domain values. Diary questions and populated prompt text are stored as historical snapshots.
+`TangentModelContainer` owns the schema for user profiles, prompts, questions, diary entries, and insights. `SwiftDataNoteStore` provides async CRUD-style operations and converts between SwiftData records and domain values. Diary questions and populated prompt text are stored as historical snapshots.
 
 Use an in-memory container for tests and previews. The app uses the default local SwiftData store; no data leaves the device.
 
 ## On-device generation
 
-`HealthLanguageModel` and `ModelCatalog` are domain protocols. Features use
+`DiaryLanguageModel` and `ModelCatalog` are domain protocols. Features use
 these protocols; only `Services/Intelligence` imports MLX. `App` injects
-`MLXHealthLanguageModel` on devices and `UnavailableHealthLanguageModel` on the
+`MLXDiaryLanguageModel` on devices and `UnavailableDiaryLanguageModel` on the
 simulator. The simulator can exercise diary workflows without model inference.
 
 Recording saves an entry, then `DailyTangentDetailsViewModel` transcribes the
@@ -35,17 +35,26 @@ background second generation task. Transcripts remain available in daily details
 `InsightsViewModel` filters entries by the selected date range and converts
 nonempty short summaries to `DiarySummary` values. The language-model service
 receives only dates and summary text. `PromptTemplate` orders these by date
-and builds the insights prompt; neither transcripts nor patient profiles are
+and builds the insights prompt; neither transcripts nor user profiles are
 inputs to insight generation. Entries without summaries are skipped.
 
-`MLXHealthLanguageModel` holds one loaded model. `MLXModelCatalog` downloads
+`MLXDiaryLanguageModel` holds one loaded model. `MLXModelCatalog` downloads
 weights to Application Support when requested in Settings. Diary content and
 inference stay on the device; network access is used to download model weights.
 
-The current diary schema stores `summaryShort` only. SwiftData's automatic
-migration removes the obsolete attribute from existing stores; an on-disk test
-verifies this without deleting diary entries. `PromptSeeder` also removes the
-retired built-in template while preserving custom prompts.
+The current diary schema stores `summaryShort` only. `TangentMigrationPlan`
+keeps frozen schemas for existing databases, copies profiles to `UserProfileRecord`
+while preserving their IDs, renames profile references, and removes obsolete
+storage. Legacy terminology is limited to these migration definitions and
+attribute rename annotations. Migration tests check preserved data and links.
+`PromptSeeder` removes exact obsolete built-in templates while preserving custom
+prompts. `ProfileSeeder` creates a neutral profile once and never resets user edits.
+
+Settings edits the user's name, interests, and concerns. Demographic fields from
+older profiles are preserved for compatibility but are not shown or sent to models.
+The model catalog offers Qwen3 0.6B, Qwen2.5 0.5B, Qwen3 1.7B, Gemma 3 1B,
+and MedGemma 1.5 4B. Qwen3 uses its tokenizer's non-thinking mode. Model choice
+is stored separately from diary data, so switching does not change diary entries.
 
 ## Adding workflows
 

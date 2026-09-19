@@ -12,7 +12,7 @@ import Tokenizers
 ///
 /// An actor so generation is serialised and never touches the main thread, and
 /// so the loaded model has one owner.
-actor MLXHealthLanguageModel: HealthLanguageModel {
+actor MLXDiaryLanguageModel: DiaryLanguageModel {
     /// Read with: log stream --device --predicate 'subsystem == "Personal.Tangent"'
     private static let log = Logger(subsystem: "Personal.Tangent", category: "Summary")
 
@@ -33,7 +33,7 @@ actor MLXHealthLanguageModel: HealthLanguageModel {
 
     func generateShortSummary(
         transcript: String,
-        profile: PatientProfile,
+        profile: UserProfile,
         onPartial: (@Sendable (String) -> Void)?
     ) async throws -> GeneratedText {
         return try await generate(
@@ -49,27 +49,30 @@ actor MLXHealthLanguageModel: HealthLanguageModel {
     /// Generates insights using saved short summaries only.
     func generateInsights(
         from summaries: [DiarySummary],
+        focus: DiaryFocus,
         period: String,
         onPartial: (@Sendable (String) -> Void)?
     ) async throws -> GeneratedText {
         guard !summaries.isEmpty else {
-            throw HealthLanguageModelError.notEnoughEntries
+            throw DiaryLanguageModelError.notEnoughEntries
         }
 
         let model = SelectedModelStore.selected
         guard ModelStorage.isDownloaded(model) else {
-            throw HealthLanguageModelError.modelNotDownloaded(model)
+            throw DiaryLanguageModelError.modelNotDownloaded(model)
         }
 
         let container = try await container(for: model)
         let prompt = PromptTemplate.weeklyInsights.filled(
             period: period,
-            summaries: summaries
+            summaries: summaries,
+            focus: focus
         )
 
         let raw = try await complete(
             prompt: prompt,
             in: container,
+            model: model,
             maxTokens: 400,
             label: "insights · \(model.displayName)",
             onPartial: onPartial
@@ -79,7 +82,7 @@ actor MLXHealthLanguageModel: HealthLanguageModel {
 
         let text = SummaryText.clean(raw)
         guard !text.isEmpty else {
-            throw HealthLanguageModelError.unusableOutput
+            throw DiaryLanguageModelError.unusableOutput
         }
 
         return GeneratedText(text: text, promptText: prompt)
@@ -88,19 +91,19 @@ actor MLXHealthLanguageModel: HealthLanguageModel {
     private func generate(
         using template: PromptTemplate,
         transcript: String,
-        profile: PatientProfile,
+        profile: UserProfile,
         maxTokens: Int,
         label: String,
         onPartial: (@Sendable (String) -> Void)?
     ) async throws -> GeneratedText {
         let transcript = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !transcript.isEmpty else {
-            throw HealthLanguageModelError.emptyTranscript
+            throw DiaryLanguageModelError.emptyTranscript
         }
 
         let model = SelectedModelStore.selected
         guard ModelStorage.isDownloaded(model) else {
-            throw HealthLanguageModelError.modelNotDownloaded(model)
+            throw DiaryLanguageModelError.modelNotDownloaded(model)
         }
 
         let container = try await container(for: model)
@@ -109,6 +112,7 @@ actor MLXHealthLanguageModel: HealthLanguageModel {
         let raw = try await complete(
             prompt: prompt,
             in: container,
+            model: model,
             maxTokens: maxTokens,
             label: "\(label) · \(model.displayName)",
             onPartial: onPartial
@@ -118,7 +122,7 @@ actor MLXHealthLanguageModel: HealthLanguageModel {
 
         let text = SummaryText.clean(raw)
         guard !text.isEmpty else {
-            throw HealthLanguageModelError.unusableOutput
+            throw DiaryLanguageModelError.unusableOutput
         }
 
         return GeneratedText(text: text, promptText: prompt)
@@ -127,11 +131,12 @@ actor MLXHealthLanguageModel: HealthLanguageModel {
     private func complete(
         prompt: String,
         in container: ModelContainer,
+        model: SummaryModelID,
         maxTokens: Int,
         label: String,
         onPartial: (@Sendable (String) -> Void)?
     ) async throws -> String {
-        // Near-deterministic: this is a record of what the patient said, not a
+        // Near-deterministic: this is a record of what the user said, not a
         // piece of writing that benefits from variety.
         let parameters = GenerateParameters(maxTokens: maxTokens, temperature: 0.2)
 
@@ -141,11 +146,17 @@ actor MLXHealthLanguageModel: HealthLanguageModel {
         // came to block every other.
         #if TANGENT_LEGACY_MLX
         let stream = try await container.perform { context in
-            let input = try await context.processor.prepare(input: UserInput(prompt: prompt))
+            let input = try await context.processor.prepare(input: UserInput(
+                prompt: prompt,
+                additionalContext: model.disablesThinking ? ["enable_thinking": false] : nil
+            ))
             return try MLXLMCommon.generate(input: input, parameters: parameters, context: context)
         }
         #else
-        let input = try await container.prepare(input: UserInput(prompt: prompt))
+        let input = try await container.prepare(input: UserInput(
+            prompt: prompt,
+            additionalContext: model.disablesThinking ? ["enable_thinking": false] : nil
+        ))
         let stream = try await container.generate(input: input, parameters: parameters)
         #endif
 
@@ -241,7 +252,7 @@ actor MLXHealthLanguageModel: HealthLanguageModel {
             )
             return container
         } catch {
-            throw HealthLanguageModelError.modelLoadFailed(error.localizedDescription)
+            throw DiaryLanguageModelError.modelLoadFailed(error.localizedDescription)
         }
     }
 }

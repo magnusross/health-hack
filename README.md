@@ -1,7 +1,7 @@
 # Tangent
 
-Tangent is an iOS health voice diary. Record a check-in, read its transcript and
-short summary, and review insights generated from short summaries across days.
+Tangent is an on-device voice diary for any topic. Record a check-in, read its transcript and
+short summary, and review insights based on short summaries and your interests and concerns.
 Diary data, transcription, and model inference stay on the device. Model weights
 are downloaded from Hugging Face when selected in Settings.
 
@@ -48,6 +48,20 @@ control. Change dependencies deliberately and validate the affected profiles;
 do not commit machine-specific project copies, signing changes, or build caches.
 The two MLX versions use separate model caches, so switching profiles can require
 a model download in Settings.
+
+## Models
+
+Choose a model in Settings and download it before generating summaries:
+
+- [Qwen3 0.6B](https://huggingface.co/mlx-community/Qwen3-0.6B-4bit): compact default, approximately 350 MB.
+- [Qwen2.5 0.5B](https://huggingface.co/mlx-community/Qwen2.5-0.5B-Instruct-4bit): smallest option, approximately 300 MB.
+- [Qwen3 1.7B](https://huggingface.co/mlx-community/Qwen3-1.7B-4bit): larger general-purpose option, approximately 1 GB.
+- Gemma 3 1B: alternative general-purpose model, approximately 800 MB.
+- MedGemma 1.5 4B: specialist option, approximately 2.5 GB.
+
+These are supported 4-bit MLX models. Download size is not total runtime memory;
+performance depends on the device and input length. Qwen3 thinking mode is
+disabled for short diary responses. Existing model selections are retained.
 
 ## Development
 

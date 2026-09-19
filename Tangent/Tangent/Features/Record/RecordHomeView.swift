@@ -23,7 +23,7 @@ struct RecordHomeView: View {
         audioRecorder: any AudioRecorder,
         transcriber: any Transcriber,
         noteStore: any NoteStore,
-        healthModel: (any HealthLanguageModel)? = nil,
+        languageModel: (any DiaryLanguageModel)? = nil,
         openSettings: @escaping () -> Void,
         onRecordingFinished: @escaping (UUID) -> Void,
         instructionDelay: TimeInterval = 3,
@@ -35,7 +35,7 @@ struct RecordHomeView: View {
                 audioRecorder: audioRecorder,
                 transcriber: transcriber,
                 noteStore: noteStore,
-                healthModel: healthModel
+                languageModel: languageModel
             )
         )
         self.openSettings = openSettings
