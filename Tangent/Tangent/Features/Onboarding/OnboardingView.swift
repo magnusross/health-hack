@@ -77,7 +77,7 @@ struct OnboardingView: View {
                             .frame(width: diameter, height: diameter)
                             .compositingGroup()
                             .opacity(0.5)
-                            .position(x: proxy.size.width / 2, y: proxy.size.height * 0.55)
+                            .position(x: proxy.size.width / 2, y: proxy.size.height * 0.42)
                     }
                     .clipped()
                 }
