@@ -86,18 +86,16 @@ struct SettingsView: View {
 
     private var focusSection: some View {
         Section {
-            TextField("Interests — what would you like to explore?", text: $model.interests, axis: .vertical)
+            TextField("Interests", text: $model.interests, axis: .vertical)
                 .lineLimit(2...5)
                 .accessibilityIdentifier("profile-interests")
                 .focused($focusedProfileField, equals: .interests)
-            TextField("Concerns — what is on your mind?", text: $model.concerns, axis: .vertical)
+            TextField("Concerns", text: $model.concerns, axis: .vertical)
                 .lineLimit(2...5)
                 .accessibilityIdentifier("profile-concerns")
                 .focused($focusedProfileField, equals: .concerns)
         } header: {
             Text("Your focus")
-        } footer: {
-            Text("Write about anything: projects, relationships, learning, routines, or ideas. Add one topic per line and tap Save.")
         }
     }
 
