@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate a machine-local Xcode project from the shared project."""
+"""Select the Xcode project, generating a local compatibility copy when needed."""
 import argparse
 import os
 from pathlib import Path
@@ -12,6 +12,10 @@ SOURCE = ROOT / "Tangent/Tangent.xcodeproj"
 
 
 def generate(profile, team=None):
+    # Newer toolchains use the shared Xcode project directly. A generated copy
+    # is needed only for compatibility or a machine-specific signing override.
+    if profile == 'modern' and not team:
+        return SOURCE
     project = (SOURCE / "project.pbxproj").read_text()
     if profile == "xcode16":
         for expected in ('version = 3.31.3;', 'version = 1.3.0;', 'productName = MLXHuggingFace;', 'productName = HuggingFace;'):
@@ -50,6 +54,7 @@ def main():
     parser.add_argument('profile', choices=['auto', 'xcode16', 'modern'], nargs='?', default='auto')
     parser.add_argument('--team', default=os.environ.get('TANGENT_DEVELOPMENT_TEAM'))
     parser.add_argument('--resolve', action='store_true', help='Download pinned packages using the selected Xcode')
+    parser.add_argument('--open', action='store_true', help='Open the selected project in Xcode')
     args = parser.parse_args()
     version = subprocess.check_output(['xcrun', 'swift', '--version'], text=True, stderr=subprocess.STDOUT)
     match = re.search(r'Swift version (\d+)\.(\d+)', version)
@@ -63,6 +68,10 @@ def main():
     print(f'Profile: {profile}\nOpen: {target}', flush=True)
     if args.resolve:
         subprocess.run(['xcodebuild', '-resolvePackageDependencies', '-project', str(target), '-scheme', 'Tangent', '-clonedSourcePackagesDirPath', str(ROOT / f'.build/packages-{profile}'), '-onlyUsePackageVersionsFromResolvedFile'], check=True)
+    if args.open:
+        developer_dir = Path(subprocess.check_output(['xcode-select', '-p'], text=True).strip())
+        xcode = developer_dir.parent.parent
+        subprocess.run(['open', '-a', str(xcode), str(target)], check=True)
 
 
 if __name__ == '__main__':

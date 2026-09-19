@@ -53,6 +53,7 @@ class EnvironmentTests(unittest.TestCase):
 
     def test_modern_round_trip_and_lock_isolation(self):
         modern = environment.generate('modern')
+        self.assertEqual(modern, environment.SOURCE)
         legacy = environment.generate('xcode16')
         self.assertEqual((modern / 'project.pbxproj').read_bytes(), self.original)
         lock = 'project.xcworkspace/xcshareddata/swiftpm/Package.resolved'
@@ -85,6 +86,20 @@ class EnvironmentTests(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 environment.main()
             generate.assert_not_called()
+
+    def test_open_uses_selected_xcode_and_compatible_project(self):
+        target = Path('/tmp/Tangent-xcode16.xcodeproj')
+        with patch('sys.argv', ['environment.py', '--open']), \
+             patch('subprocess.check_output', side_effect=[
+                 'Apple Swift version 6.0.3', '/Applications/Xcode-16.2.app/Contents/Developer\n'
+             ]), \
+             patch.object(environment, 'generate', return_value=target), \
+             patch('subprocess.run') as run, \
+             contextlib.redirect_stdout(io.StringIO()):
+            environment.main()
+            run.assert_called_once_with([
+                'open', '-a', '/Applications/Xcode-16.2.app', str(target)
+            ], check=True)
 
 
 if __name__ == '__main__':
